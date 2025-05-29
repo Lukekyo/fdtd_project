@@ -200,7 +200,7 @@ class LineSource:
             + (bd.array(self.y) - self.y[L // 2]) ** 2
             + (bd.array(self.z) - self.z[L // 2]) ** 2,
             bd.float,
-        )
+        ) # 
 
         self.profile = bd.exp(-(vect ** 2) / (2 * (0.5 * vect.max()) ** 2))
         self.profile /= self.profile.sum()
