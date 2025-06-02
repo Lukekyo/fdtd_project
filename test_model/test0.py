@@ -27,6 +27,8 @@ grid[:10, :, :] = fdtd.PML(name="pml_top")
 grid[-10:, :, :] = fdtd.PML(name="pml_bottom")
 # grid[:, 0:1, 0] = fdtd.PeriodicBoundary(name="periodic_left")
 grid[:, -1:, 0] = fdtd.PeriodicBoundary(name="periodic")
+# grid[:, :, :] = fdtd.PML(name="pml_top")
+# grid[-10:, :, :] = fdtd.PML(name="pml_bottom")
 
 simfolder = grid.save_simulation("test")  # initializing environment to save simulation data
 print(simfolder)
@@ -56,28 +58,62 @@ det_y = start+layer_A_THK+layer_B_THK +50
 grid[det_y:det_y+1, :, 0] = fdtd.LineDetector(name="detector")
 
 # === 執行模擬 ===
+# from IPython.display import clear_output
+# for i in range(500):
+#     grid.step()
+#     if i % 10 == 0:
+#         grid.visualize(z=0, animate=True, index=i, save=True, folder=simfolder)
+#         plt.title(f"t = {i}")
+#         clear_output(wait=True)
 
+# grid.save_data()
 from IPython.display import clear_output
-for i in range(300):
+
+spacing_um = grid.grid_spacing * 1e6  # 換算成 μm
+
+for i in range(500):
     grid.step()
     if i % 10 == 0:
-        grid.visualize(z=0, animate=True, index=i, save=True, folder=simfolder)
+        fig = grid.visualize(z=0, animate=True, index=i, save=True, folder=simfolder)
         plt.title(f"t = {i}")
+
+        # 🟡 取得目前 axes
+        ax = plt.gca()
+
+        # 🟡 將 xticks 轉換為 μm 單位（實際 y 方向）
+        xticks = ax.get_xticks()
+        ax.set_xticklabels([f"{tick * spacing_um:.1f}" for tick in xticks])
+        ax.set_xlabel("y (μm)")
+
+        # 🟡 將 yticks 轉換為 μm 單位（實際 x 方向）
+        yticks = ax.get_yticks()
+        ax.set_yticklabels([f"{tick * spacing_um:.1f}" for tick in yticks])
+        ax.set_ylabel("x (μm)")
+
+        plt.tight_layout()
         clear_output(wait=True)
-
 grid.save_data()
-
 # === 繪製穿透強度 ===
 detector_data = np.array(grid.detector.detector_values()["E"])  # 將 list 轉為 ndarray
 Ez = detector_data[..., 2]  # 取出 Ez 分量
 intensity = np.sum(np.abs(Ez)**2, axis=1)
-plt.figure()
-plt.plot(intensity)
-plt.title("Transmitted Intensity vs Time")
-plt.xlabel("Time step")
-plt.ylabel("Intensity")
-plt.grid(True)
+
+ax = plt.gca()
+spacing_um = grid.grid_spacing * 1e6  # 將 grid spacing 轉換為微米
+
+# 設定 x 軸 (y-direction in simulation)
+xticks = ax.get_xticks()
+ax.set_xticklabels([f"{x * spacing_um:.1f}" for x in xticks])
+ax.set_xlabel("y (µm)")
+# 設定 y 軸 (x-direction in simulation)
+yticks = ax.get_yticks()
+ax.set_yticklabels([f"{y * spacing_um:.1f}" for y in yticks])
+ax.set_ylabel("x (µm)")
+
+plt.title("Simulation Snapshot")
+plt.tight_layout()
 plt.show()
+
 
 # === 輸出網格與物件資訊 ===
 with open(os.path.join(simfolder, "grid_info.txt"), "w") as f:
