@@ -39,14 +39,17 @@ def curl_E(E: Tensorlike) -> Tensorlike:
     """
     curl = bd.zeros(E.shape,dtype=E.dtype)
 
-    curl[:, :-1, :, 0] += E[:, 1:, :, 2] - E[:, :-1, :, 2]
-    curl[:, :, :-1, 0] -= E[:, :, 1:, 1] - E[:, :, :-1, 1]
+    # curlx = dEz/dy - dEy/dz
+    curl[:, :-1, :, 0] += E[:, 1:, :, 2] - E[:, :-1, :, 2] #dEz/dy
+    curl[:, :, :-1, 0] -= E[:, :, 1:, 1] - E[:, :, :-1, 1] #dEy/dz
 
-    curl[:, :, :-1, 1] += E[:, :, 1:, 0] - E[:, :, :-1, 0]
-    curl[:-1, :, :, 1] -= E[1:, :, :, 2] - E[:-1, :, :, 2]
+    # curly = dEx/dz - dEz/dx
+    curl[:, :, :-1, 1] += E[:, :, 1:, 0] - E[:, :, :-1, 0] #dEx/dz
+    curl[:-1, :, :, 1] -= E[1:, :, :, 2] - E[:-1, :, :, 2] #dEz/dx
 
-    curl[:-1, :, :, 2] += E[1:, :, :, 1] - E[:-1, :, :, 1]
-    curl[:, :-1, :, 2] -= E[:, 1:, :, 0] - E[:, :-1, :, 0]
+    # curlz = dEy/dx - dEx/dy
+    curl[:-1, :, :, 2] += E[1:, :, :, 1] - E[:-1, :, :, 1] #dEy/dx
+    curl[:, :-1, :, 2] -= E[:, 1:, :, 0] - E[:, :-1, :, 0] #dEx/dy
 
     return curl
 
@@ -64,6 +67,7 @@ def curl_H(H: Tensorlike) -> Tensorlike:
     """
     curl = bd.zeros(H.shape,dtype=H.dtype)
 
+    # curlx = dHz/dy - dHy/dz
     curl[:, 1:, :, 0] += H[:, 1:, :, 2] - H[:, :-1, :, 2]
     curl[:, :, 1:, 0] -= H[:, :, 1:, 1] - H[:, :, :-1, 1]
 

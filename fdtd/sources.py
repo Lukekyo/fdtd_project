@@ -189,22 +189,22 @@ class LineSource:
                     f"The grid already has an attribute with name {self.name}"
                 )
 
-        self.x, self.y, self.z = self._handle_slices(x, y, z)
+        self.x, self.y, self.z = self._handle_slices(x, y, z) # convert slices to lists
 
-        self.period = grid._handle_time(self.period)
-        self.frequency = 1.0 / self.period
+        self.period = grid._handle_time(self.period) # convert to time
+        self.frequency = 1.0 / self.period # convert to frequency
 
-        L = len(self.x)
+        L = len(self.x) # length of the line
         vect = bd.array(
             (bd.array(self.x) - self.x[L // 2]) ** 2
             + (bd.array(self.y) - self.y[L // 2]) ** 2
             + (bd.array(self.z) - self.z[L // 2]) ** 2,
             bd.float,
-        )
+        ) # distance from the center of the line, only work for uniform grid
 
-        self.profile = bd.exp(-(vect ** 2) / (2 * (0.5 * vect.max()) ** 2))
-        self.profile /= self.profile.sum()
-        self.profile *= self.amplitude
+        self.profile = bd.exp(-(vect ** 2) / (2 * (0.5 * vect.max()) ** 2)) # gaussian profile
+        self.profile /= self.profile.sum() # normalize the profile
+        self.profile *= self.amplitude # scale the profile to the amplitude
 
     def _handle_slices(
         self, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice
@@ -377,7 +377,7 @@ class PlaneSource:
         x = bd.arange(self.x.start, self.x.stop, 1) - (self.x.start + self.x.stop) // 2
         y = bd.arange(self.y.start, self.y.stop, 1) - (self.y.start + self.y.stop) // 2
         z = bd.arange(self.z.start, self.z.stop, 1) - (self.z.start + self.z.stop) // 2
-        xvec, yvec, zvec = bd.broadcast_arrays(
+        xvec, yvec, zvec = bd.broadcast_arrays( # broadcast the x, y and z arrays
             x[:, None, None], y[None, :, None], z[None, None, :]
         )
         _xvec = bd.array(xvec, float)
