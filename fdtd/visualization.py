@@ -426,48 +426,44 @@ def plot_detection(detector_dict=None, specific_plot=None, show=True, style=None
             plt.figure(0, figsize=(15, 15))
         elif detector[-2] == "H":
             plt.figure(1, figsize=(15, 15))
+        # for dimension in range(len(detector_dict[detector][0][0])):
+        #     if specific_plot is not None:
+        #         if ["x", "y", "z"].index(specific_plot[1]) != dimension:
+        #             continue
+        #     # if specific_plot, subplot on 1x1, else subplot on 2x2
+        #     plt.subplot(
+        #         2 - int(specific_plot is not None),
+        #         2 - int(specific_plot is not None),
+        #         dimension + 1 if specific_plot is None else 1,
+        #     )
+        #     hilbertPlot = abs(
+        #         hilbert([x[0][dimension] for x in detector_dict[detector]])
+        #     )
+        #     plt.plot(hilbertPlot, label=detector)
+        #     plt.title(detector[-2] + "(" + ["x", "y", "z"][dimension] + ")")
+        #     if detector[-2] not in maxArray:
+        #         maxArray[detector[-2]] = {}
+        #     if str(dimension) not in maxArray[detector[-2]]:
+        #         maxArray[detector[-2]][str(dimension)] = []
+        #     maxArray[detector[-2]][str(dimension)].append(
+        #         [detector, where(hilbertPlot == max(hilbertPlot))[0][0]]
+        #     )
+
+    # Combine E and H components into a single 2x3 matrix plot
+    plt.figure(figsize=(15, 10))
+    for i in range(2):
         for dimension in range(len(detector_dict[detector][0][0])):
-            if specific_plot is not None:
-                if ["x", "y", "z"].index(specific_plot[1]) != dimension:
-                    continue
-            # if specific_plot, subplot on 1x1, else subplot on 2x2
-            plt.subplot(
-                2 - int(specific_plot is not None),
-                2 - int(specific_plot is not None),
-                dimension + 1 if specific_plot is None else 1,
-            )
+            plt.subplot(2, 3, i * 3 + dimension + 1)
             hilbertPlot = abs(
                 hilbert([x[0][dimension] for x in detector_dict[detector]])
             )
-            plt.plot(hilbertPlot, label=detector)
-            plt.title(detector[-2] + "(" + ["x", "y", "z"][dimension] + ")")
-            if detector[-2] not in maxArray:
-                maxArray[detector[-2]] = {}
-            if str(dimension) not in maxArray[detector[-2]]:
-                maxArray[detector[-2]][str(dimension)] = []
-            maxArray[detector[-2]][str(dimension)].append(
-                [detector, where(hilbertPlot == max(hilbertPlot))[0][0]]
-            )
-
-    # Loop same as above, only to add axes labels
-    for i in range(2):
-        if specific_plot is not None:
-            if ["E", "H"][i] != specific_plot[0]:
-                continue
-        plt.figure(i)
-        for dimension in range(len(detector_dict[detector][0][0])):
-            if specific_plot is not None:
-                if ["x", "y", "z"].index(specific_plot[1]) != dimension:
-                    continue
-            plt.subplot(
-                2 - int(specific_plot is not None),
-                2 - int(specific_plot is not None),
-                dimension + 1 if specific_plot is None else 1,
-            )
+            plt.plot(hilbertPlot, label=f"{['E', 'H'][i]}{['x', 'y', 'z'][dimension]}")
+            plt.title(f"{['E', 'H'][i]}({['x', 'y', 'z'][dimension]})")
             plt.xlabel("Time steps")
             plt.ylabel("Magnitude")
-        plt.suptitle("Intensity profile")
+    plt.suptitle("Intensity profile")
     plt.legend()
+    plt.tight_layout()
     plt.show()
 
     for item in maxArray:

@@ -25,10 +25,9 @@ grid = fdtd.Grid(
 # === 邊界條件 ===
 grid[:10, :, :] = fdtd.PML(name="pml_top")
 grid[-10:, :, :] = fdtd.PML(name="pml_bottom")
-# grid[:, 0:1, 0] = fdtd.PeriodicBoundary(name="periodic_left")
-grid[:, -1:, 0] = fdtd.PeriodicBoundary(name="periodic")
-# grid[:, :, :] = fdtd.PML(name="pml_top")
-# grid[-10:, :, :] = fdtd.PML(name="pml_bottom")
+grid[:,:10, :] = fdtd.PML(name="pml_right")
+grid[:,-10:, :] = fdtd.PML(name="pml_left")
+# grid[:, :1, 0] = fdtd.PeriodicBoundary(name="periodic")
 
 simfolder = grid.save_simulation("test")  # initializing environment to save simulation data
 print(simfolder)
@@ -40,7 +39,7 @@ layer_C_THK = to_grid(um(3), grid_spacing)  # 1 µm
 start = to_grid(x_span/2, grid_spacing) # 起始位置 y = 2 µm
 
 # grid[start:start+layer_A_THK, :, 0] = fdtd.Object(permittivity=2.25, name="Layer_A")
-grid[start+layer_A_THK:start+layer_A_THK+layer_B_THK, :, 0] = fdtd.Object(permittivity=4.0, name="Layer_B")
+grid[start+layer_A_THK:start+layer_A_THK+layer_B_THK, :, 0] = fdtd.Object(permittivity=1.0, name="Layer_B")
 # grid[start-layer_C_THK:start, :, 0] = fdtd.Object(permittivity=6.25, name="Layer_C")
 
 # === 放置平面波光源 ===
@@ -49,24 +48,14 @@ source_y = start+layer_A_THK+layer_B_THK -50
 grid[source_y:source_y+1, :, 0] = fdtd.LineSource(
     period=1550e-9 / 3e8,
     name="source",
-    pulse=False,         # ✅ 加上這一行
-    cycle=5,            # 🔁 脈衝長度（建議 5–10）
+    pulse=False,         
+    cycle=5,            # 脈衝長度（建議 5–10）
     hanning_dt=grid.time_step  # 或略大一點
 )
 # === 偵測器放在最底層下方記錄穿透波 ===
 det_y = start+layer_A_THK+layer_B_THK +50
 grid[det_y:det_y+1, :, 0] = fdtd.LineDetector(name="detector")
 
-# === 執行模擬 ===
-# from IPython.display import clear_output
-# for i in range(500):
-#     grid.step()
-#     if i % 10 == 0:
-#         grid.visualize(z=0, animate=True, index=i, save=True, folder=simfolder)
-#         plt.title(f"t = {i}")
-#         clear_output(wait=True)
-
-# grid.save_data()
 from IPython.display import clear_output
 
 spacing_um = grid.grid_spacing * 1e6  # 換算成 μm
@@ -77,18 +66,20 @@ for i in range(500):
         fig = grid.visualize(z=0, animate=True, index=i, save=True, folder=simfolder)
         plt.title(f"t = {i}")
 
-        # 🟡 取得目前 axes
+        # 取得目前 axes
         ax = plt.gca()
 
-        # 🟡 將 xticks 轉換為 μm 單位（實際 y 方向）
+        # 將 xticks 轉換為 μm 單位（實際 y 方向）
         xticks = ax.get_xticks()
-        ax.set_xticklabels([f"{tick * spacing_um:.1f}" for tick in xticks])
-        ax.set_xlabel("y (μm)")
+        ax.set_xticks(xticks)  # Explicitly set the ticks
+        ax.set_xticklabels([f"{x * spacing_um:.1f}" for x in xticks])
+        ax.set_xlabel("x (μm)")
 
-        # 🟡 將 yticks 轉換為 μm 單位（實際 x 方向）
+        # 將 yticks 轉換為 μm 單位（實際 x 方向）
         yticks = ax.get_yticks()
-        ax.set_yticklabels([f"{tick * spacing_um:.1f}" for tick in yticks])
-        ax.set_ylabel("x (μm)")
+        ax.set_yticks(yticks)  # Explicitly set the ticks
+        ax.set_yticklabels([f"{y * spacing_um:.1f}" for y in yticks])
+        ax.set_ylabel("y (μm)")
 
         plt.tight_layout()
         clear_output(wait=True)
@@ -96,24 +87,21 @@ grid.save_data()
 # === 繪製穿透強度 ===
 detector_data = np.array(grid.detector.detector_values()["E"])  # 將 list 轉為 ndarray
 Ez = detector_data[..., 2]  # 取出 Ez 分量
+
+# 每個時間步，對整條 line detector 求總能量 (intensity)
 intensity = np.sum(np.abs(Ez)**2, axis=1)
 
 ax = plt.gca()
 spacing_um = grid.grid_spacing * 1e6  # 將 grid spacing 轉換為微米
 
-# 設定 x 軸 (y-direction in simulation)
-xticks = ax.get_xticks()
-ax.set_xticklabels([f"{x * spacing_um:.1f}" for x in xticks])
-ax.set_xlabel("y (µm)")
-# 設定 y 軸 (x-direction in simulation)
-yticks = ax.get_yticks()
-ax.set_yticklabels([f"{y * spacing_um:.1f}" for y in yticks])
-ax.set_ylabel("x (µm)")
-
-plt.title("Simulation Snapshot")
-plt.tight_layout()
+fig, ax = plt.subplots()
+ax.plot(np.arange(len(intensity)), intensity, label="Intensity")
+ax.set_title("Transmitted Intensity vs Time steps")
+ax.set_xlabel("Time steps")
+ax.set_ylabel("Intensity (|Ez|^2 summed)")
+ax.grid(True)
+fig.tight_layout()
 plt.show()
-
 
 # === 輸出網格與物件資訊 ===
 with open(os.path.join(simfolder, "grid_info.txt"), "w") as f:
@@ -132,5 +120,6 @@ with open(os.path.join(simfolder, "grid_info.txt"), "w") as f:
     f.write(str([(max(map(max, x)) - min(map(min, x)) + 1)/wavelengthUnits for x in objectRange]))
 
 dic = np.load(os.path.join(simfolder, "detector_readings.npz"))
+# df = np.load(os.path.join(simfolder, "detector_readings.npz"))
 import warnings; warnings.filterwarnings("ignore") # TODO: fix plot_detection to prevent warnings
 fdtd.plot_detection(dic)
