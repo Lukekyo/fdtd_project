@@ -314,6 +314,123 @@ class LineSource:
         s += f"        @ x={x}, y={y}, z={z}\n"
         return s
 
+# DirectionalLineSource class
+class DirectionalLineSource:
+    """A directional line source along a line in the FDTD grid"""
+
+    def __init__(
+        self,
+        period: Number = 15,
+        amplitude: float = 1.0,
+        phase_shift: float = 0.0,
+        name: str = None,
+        pulse: bool = False,
+        cycle: int = 5,
+        hanning_dt: float = 10.0,
+        direction: str = "both",  # options: 'both', '+x', '-x', '+y', '-y'
+    ):
+        self.grid = None
+        self.period = period
+        self.amplitude = amplitude
+        self.phase_shift = phase_shift
+        self.name = name
+        self.pulse = pulse
+        self.cycle = cycle
+        self.frequency = 1.0 / period
+        self.hanning_dt = hanning_dt if hanning_dt is not None else 0.5 / self.frequency
+        self.direction = direction
+
+    def _register_grid(self, grid: Grid, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice):
+        self.grid = grid
+        self.grid.sources.append(self)
+        if self.name is not None:
+            if not hasattr(grid, self.name):
+                setattr(grid, self.name, self)
+            else:
+                raise ValueError(f"The grid already has an attribute with name {self.name}")
+
+        self.x, self.y, self.z = self._handle_slices(x, y, z)
+        self.period = grid._handle_time(self.period)
+        self.frequency = 1.0 / self.period
+
+        L = len(self.x)
+        vect = bd.array(
+            (bd.array(self.x) - self.x[L // 2]) ** 2
+            + (bd.array(self.y) - self.y[L // 2]) ** 2
+            + (bd.array(self.z) - self.z[L // 2]) ** 2,
+            bd.float,
+        )
+
+        self.profile = bd.exp(-(vect ** 2) / (2 * (0.5 * vect.max()) ** 2))
+        self.profile /= self.profile.sum()
+        self.profile *= self.amplitude
+
+        # Detect major axis and apply direction mask
+        if len(set(self.x)) > 1:
+            main_axis = "x"
+            direction_vector = bd.array([i - self.x[L // 2] for i in self.x])
+        elif len(set(self.y)) > 1:
+            main_axis = "y"
+            direction_vector = bd.array([i - self.y[L // 2] for i in self.y])
+        elif len(set(self.z)) > 1:
+            main_axis = "z"
+            direction_vector = bd.array([i - self.z[L // 2] for i in self.z])
+        else:
+            raise ValueError("DirectionalLineSource must extend in at least one dimension.")
+
+        # 建立 direction mask
+        if self.direction == "both":
+            self.direction_mask = bd.ones_like(self.profile)
+        elif self.direction == "+x":
+            self.direction_mask = bd.array(self.x) > self.x[L // 2]
+        elif self.direction == "-x":
+            self.direction_mask = bd.array(self.x) < self.x[L // 2]
+        elif self.direction == "+y":
+            self.direction_mask = bd.array(self.y) > self.y[L // 2]
+        elif self.direction == "-y":
+            self.direction_mask = bd.array(self.y) < self.y[L // 2]
+        else:
+            raise ValueError(f"Invalid direction setting: {self.direction}")
+
+        # Apply direction mask to profile
+        self.profile *= self.direction_mask
+
+    def _handle_slices(self, x, y, z):
+        from .sources import LineSource # local import to reuse safely
+        return LineSource._handle_slices(self, x, y, z)  # reuse existing logic
+
+    def update_E(self):
+        q = self.grid.time_steps_passed
+        if self.pulse:
+            t1 = int(2 * pi / (self.frequency * self.hanning_dt / self.cycle))
+            if q < t1:
+                vect = self.profile * self.direction_mask * hanning(
+                    self.frequency, q * self.hanning_dt, self.cycle
+                )
+            else:
+                vect = self.profile * 0
+        else:
+            vect = self.profile * self.direction_mask * sin(2 * pi * q / self.period + self.phase_shift)
+
+        for x, y, z, value in zip(self.x, self.y, self.z, vect):
+            self.grid.E[x, y, z, 2] += value
+
+    def update_H(self):
+        pass
+
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}(period={self.period}, amplitude={self.amplitude}, "
+            f"phase_shift={self.phase_shift}, direction={self.direction}, name={repr(self.name)})"
+        )
+
+    def __str__(self):
+        s = "    " + repr(self) + "\n"
+        x = f"[{self.x[0]}, ... , {self.x[-1]}]"
+        y = f"[{self.y[0]}, ... , {self.y[-1]}]"
+        z = f"[{self.z[0]}, ... , {self.z[-1]}]"
+        s += f"        @ x={x}, y={y}, z={z}\n"
+        return s
 
 ## PlaneSource class
 class PlaneSource:

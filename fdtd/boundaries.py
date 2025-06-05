@@ -218,6 +218,79 @@ class _PeriodicBoundaryZ(PeriodicBoundary):
         Z-direction apply """
         self.grid.H[:, :, -1, :] = self.grid.H[:, :, 0, :]
 
+## Bloch Periodic Boundaries
+class BlochBoundary(Boundary):
+    """ An FDTD Bloch Boundary
+
+    Note:
+        Like PeriodicBoundary, but with a complex Bloch phase factor.
+        Will be cast to _BlochBoundaryX, _BlochBoundaryY, or _BlochBoundaryZ
+        depending on registration axis.
+    """
+    def __init__(self, k_component: float, length: float, name: str = None):
+        super().__init__(name=name)
+        self.k_component = k_component
+        self.length = length
+        self.phase = bd.exp(1j * k_component * length)
+
+    def _register_grid(
+            self, grid: Grid, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice
+    ):
+        super()._register_grid(grid=grid, x=x, y=y, z=z)
+
+        if self.x == 0 or self.x == -1:
+            self.__class__ = _BlochBoundaryX # subclass of BlochBoundary
+            if hasattr(grid, "_xlow_boundary") or hasattr(grid, "_xhigh_boundary"):
+                raise AttributeError("grid already has an xlow/xhigh boundary!")
+            setattr(grid, "_xlow_boundary", self)
+            setattr(grid, "_xhigh_boundary", self)
+        elif self.y == 0 or self.y == -1:
+            self.__class__ = _BlochBoundaryY # subclass of BlochBoundary
+            if hasattr(grid, "_ylow_boundary") or hasattr(grid, "_yhigh_boundary"):
+                raise AttributeError("grid already has an ylow/yhigh boundary!")
+            setattr(grid, "_ylow_boundary", self)
+            setattr(grid, "_yhigh_boundary", self)
+        elif self.z == 0 or self.z == -1:
+            self.__class__ = _BlochBoundaryZ # subclass of BlochBoundary
+            if hasattr(grid, "_zlow_boundary") or hasattr(grid, "_zhigh_boundary"):
+                raise AttributeError("grid already has an zlow/zhigh boundary!")
+            setattr(grid, "_zlow_boundary", self)
+            setattr(grid, "_zhigh_boundary", self)
+        else:
+            raise IndexError("A Bloch boundary must be placed at index 0 or -1.")
+
+
+# Bloch Boundaries in the X-direction
+class _BlochBoundaryX(BlochBoundary):
+    def update_E(self):
+        self.grid.E[0, :, :, :] = self.grid.E[-2, :, :, :] * self.phase
+        self.grid.E[-1, :, :, :] = self.grid.E[1, :, :, :] * bd.conj(self.phase)
+
+    def update_H(self):
+        self.grid.H[0, :, :, :] = self.grid.H[-2, :, :, :] * self.phase
+        self.grid.H[-1, :, :, :] = self.grid.H[1, :, :, :] * bd.conj(self.phase)
+
+
+# Bloch Boundaries in the Y-direction
+class _BlochBoundaryY(BlochBoundary):
+    def update_E(self):
+        self.grid.E[:, 0, :, :] = self.grid.E[:, -2, :, :] * self.phase
+        self.grid.E[:, -1, :, :] = self.grid.E[:, 1, :, :] * bd.conj(self.phase)
+
+    def update_H(self):
+        self.grid.H[:, 0, :, :] = self.grid.H[:, -2, :, :] * self.phase
+        self.grid.H[:, -1, :, :] = self.grid.H[:, 1, :, :] * bd.conj(self.phase)
+
+
+# Bloch Boundaries in the Z-direction
+class _BlochBoundaryZ(BlochBoundary):
+    def update_E(self):
+        self.grid.E[:, :, 0, :] = self.grid.E[:, :, -2, :] * self.phase
+        self.grid.E[:, :, -1, :] = self.grid.E[:, :, 1, :] * bd.conj(self.phase)
+
+    def update_H(self):
+        self.grid.H[:, :, 0, :] = self.grid.H[:, :, -2, :] * self.phase
+        self.grid.H[:, :, -1, :] = self.grid.H[:, :, 1, :] * bd.conj(self.phase)
 
 ## Perfectly Matched Layer (PML)
 
