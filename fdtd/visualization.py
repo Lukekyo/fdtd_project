@@ -34,6 +34,7 @@ def visualize(
     pbcolor="C3",
     pmlcolor=(0, 0, 0, 0.1),
     objcolor=(1, 0, 0, 0.1),
+    blochcolor = (0.6, 0.4, 0.9, 0.8),  # 紫色 + 透明度
     srccolor="C0",
     detcolor="C2",
     norm="linear",
@@ -71,6 +72,7 @@ def visualize(
     # imports (placed here to circumvent circular imports)
     from .sources import PointSource, LineSource, PlaneSource
     from .boundaries import _PeriodicBoundaryX, _PeriodicBoundaryY, _PeriodicBoundaryZ
+    from .boundaries import BlochBoundary
     from .boundaries import (
         _PMLXlow,
         _PMLXhigh,
@@ -118,6 +120,7 @@ def visualize(
     plt.plot([], lw=3, color=pbcolor, label="Periodic Boundaries")
     plt.plot([], lw=3, color=srccolor, label="Sources")
     plt.plot([], lw=3, color=detcolor, label="Detectors")
+    plt.plot([], lw=3, color=blochcolor, label="Bloch Boundaries")
 
     # Grid energy
     grid_energy = bd.sum(grid.E**2 + grid.H**2, -1)
@@ -287,6 +290,19 @@ def visualize(
                 facecolor=pmlcolor,
             )
             plt.gca().add_patch(patch)
+        elif isinstance(boundary, BlochBoundary):
+            # 若有 z 切面顯示 (最常見情況)
+            if z is not None:
+                if boundary.x in [0, -1]:  # 左右
+                    _x = [-0.5, -0.5, float("nan"), Nx - 0.5, Nx - 0.5]
+                    _y = [-0.5, Ny - 0.5, float("nan"), -0.5, Ny - 0.5]
+                    plt.plot(_y, _x, color=blochcolor, linewidth=3)
+                elif boundary.y in [0, -1]:  # 上下
+                    _x = [-0.5, Nx - 0.5, float("nan"), -0.5, Nx - 0.5]
+                    _y = [-0.5, -0.5, float("nan"), Ny - 0.5, Ny - 0.5]
+                    plt.plot(_y, _x, color=blochcolor, linewidth=3)
+            # 如果你之後改用 x/y 平面也可以在此加 elif x is not None 或 y is not None 的畫法
+
 
     for obj in grid.objects:
         if x is not None:
@@ -314,8 +330,7 @@ def visualize(
     if norm == "log":
         cmap_norm = LogNorm(vmin=1e-4, vmax=grid_energy.max() + 1e-4)
     plt.imshow(
-        abs(bd.numpy(grid_energy)), cmap=cmap, interpolation="sinc", norm=cmap_norm
-    )
+        abs(bd.numpy(grid_energy)), cmap=cmap, interpolation="sinc", norm=cmap_norm)
 
     # finalize the plot
     plt.ylabel(xlabel)
@@ -426,48 +441,44 @@ def plot_detection(detector_dict=None, specific_plot=None, show=True, style=None
             plt.figure(0, figsize=(15, 15))
         elif detector[-2] == "H":
             plt.figure(1, figsize=(15, 15))
+        # for dimension in range(len(detector_dict[detector][0][0])):
+        #     if specific_plot is not None:
+        #         if ["x", "y", "z"].index(specific_plot[1]) != dimension:
+        #             continue
+        #     # if specific_plot, subplot on 1x1, else subplot on 2x2
+        #     plt.subplot(
+        #         2 - int(specific_plot is not None),
+        #         2 - int(specific_plot is not None),
+        #         dimension + 1 if specific_plot is None else 1,
+        #     )
+        #     hilbertPlot = abs(
+        #         hilbert([x[0][dimension] for x in detector_dict[detector]])
+        #     )
+        #     plt.plot(hilbertPlot, label=detector)
+        #     plt.title(detector[-2] + "(" + ["x", "y", "z"][dimension] + ")")
+        #     if detector[-2] not in maxArray:
+        #         maxArray[detector[-2]] = {}
+        #     if str(dimension) not in maxArray[detector[-2]]:
+        #         maxArray[detector[-2]][str(dimension)] = []
+        #     maxArray[detector[-2]][str(dimension)].append(
+        #         [detector, where(hilbertPlot == max(hilbertPlot))[0][0]]
+        #     )
+
+    # Combine E and H components into a single 2x3 matrix plot
+    plt.figure(figsize=(15, 10))
+    for i in range(2):
         for dimension in range(len(detector_dict[detector][0][0])):
-            if specific_plot is not None:
-                if ["x", "y", "z"].index(specific_plot[1]) != dimension:
-                    continue
-            # if specific_plot, subplot on 1x1, else subplot on 2x2
-            plt.subplot(
-                2 - int(specific_plot is not None),
-                2 - int(specific_plot is not None),
-                dimension + 1 if specific_plot is None else 1,
-            )
+            plt.subplot(2, 3, i * 3 + dimension + 1)
             hilbertPlot = abs(
                 hilbert([x[0][dimension] for x in detector_dict[detector]])
             )
-            plt.plot(hilbertPlot, label=detector)
-            plt.title(detector[-2] + "(" + ["x", "y", "z"][dimension] + ")")
-            if detector[-2] not in maxArray:
-                maxArray[detector[-2]] = {}
-            if str(dimension) not in maxArray[detector[-2]]:
-                maxArray[detector[-2]][str(dimension)] = []
-            maxArray[detector[-2]][str(dimension)].append(
-                [detector, where(hilbertPlot == max(hilbertPlot))[0][0]]
-            )
-
-    # Loop same as above, only to add axes labels
-    for i in range(2):
-        if specific_plot is not None:
-            if ["E", "H"][i] != specific_plot[0]:
-                continue
-        plt.figure(i)
-        for dimension in range(len(detector_dict[detector][0][0])):
-            if specific_plot is not None:
-                if ["x", "y", "z"].index(specific_plot[1]) != dimension:
-                    continue
-            plt.subplot(
-                2 - int(specific_plot is not None),
-                2 - int(specific_plot is not None),
-                dimension + 1 if specific_plot is None else 1,
-            )
+            plt.plot(hilbertPlot, label=f"{['E', 'H'][i]}{['x', 'y', 'z'][dimension]}")
+            plt.title(f"{['E', 'H'][i]}({['x', 'y', 'z'][dimension]})")
             plt.xlabel("Time steps")
             plt.ylabel("Magnitude")
-        plt.suptitle("Intensity profile")
+    plt.suptitle("Intensity profile")
     plt.legend()
+    plt.tight_layout()
     plt.show()
 
     for item in maxArray:

@@ -1,33 +1,17 @@
 # fdtd_helper.py
 
-def um(val):
-    """
-    將微米數值轉換為公尺（m）
-    Example:
-        um(5) -> 5e-6
-    """
-    return val * 1e-6
+def um(x: float) -> float:
+    """Convert micrometer to meters"""
+    return x * 1e-6
 
-def nm(val):
-    """
-    將奈米數值轉換為公尺（m）
-    Example:
-        nm(10) -> 10e-9
-    """
-    return val * 1e-9
+def nm(x: float) -> float:
+    """Convert nanometer to meters"""
+    return x * 1e-9
 
-def to_grid(val, grid_spacing):
-    """
-    將實際距離（以公尺為單位）轉換為 FDTD 模擬格點索引（整數）
-    Example:
-        to_grid(5e-6, 10e-9) -> 500
-    """
-    return int(val / grid_spacing + 0.5)
+def to_grid(length: float, grid_spacing: float) -> int:
+    """Convert physical length to grid index"""
+    return int(length / grid_spacing + 0.5)
 
-def from_grid(index, grid_spacing):
-    """
-    將格點索引轉換為實際距離（公尺）
-    Example:
-        from_grid(500, 10e-9) -> 5e-6
-    """
+def from_grid(index: int, grid_spacing: float) -> float:
+    """Convert grid index to physical length"""
     return index * grid_spacing

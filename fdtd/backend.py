@@ -71,6 +71,7 @@ class Backend:
 
     # constants
     pi = numpy.pi
+    c0 = 299_792_458  # 光速 (m/s)
 
     def __repr__(self):
         return self.__class__.__name__
@@ -108,6 +109,9 @@ class NumpyBackend(Backend):
 
     exp = staticmethod(numpy.exp)
     """ exponential of all elements in array """
+
+    conj = staticmethod(numpy.conj)
+    """ conjugation of all elements in array """
 
     sin = staticmethod(numpy.sin)
     """ sine of all elements in array """
@@ -159,6 +163,9 @@ class NumpyBackend(Backend):
     zeros = _replace_float(numpy.zeros)
     """ create an array filled with zeros """
 
+    ones_like = staticmethod(numpy.ones_like)
+    """ create an array filled with ones """
+
     zeros_like = staticmethod(numpy.zeros_like)
     """ create an array filled with zeros """
 
@@ -175,8 +182,11 @@ class NumpyBackend(Backend):
     fft = staticmethod(numpy.fft.fft)
 
     exp = staticmethod(numpy.exp)
+    
+    conj = staticmethod(numpy.conj)
 
     divide = staticmethod(numpy.divide)
+    
 
     # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     # beware to future people:
@@ -225,6 +235,9 @@ if TORCH_AVAILABLE:
 
         exp = staticmethod(torch.exp)
         """ exponential of all elements in array """
+
+        conj = staticmethod(torch.conj)
+        """ conjugation of all elements in array """
 
         sin = staticmethod(torch.sin)
         """ sine of all elements in array """
@@ -303,6 +316,8 @@ if TORCH_AVAILABLE:
         divide = staticmethod(torch.div)
 
         exp = staticmethod(torch.exp)
+
+        conj = staticmethod(torch.conj)
         # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
         # The same warning applies here.
         # <3 <3 <3 <3

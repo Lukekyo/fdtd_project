@@ -39,14 +39,17 @@ def curl_E(E: Tensorlike) -> Tensorlike:
     """
     curl = bd.zeros(E.shape,dtype=E.dtype)
 
-    curl[:, :-1, :, 0] += E[:, 1:, :, 2] - E[:, :-1, :, 2]
-    curl[:, :, :-1, 0] -= E[:, :, 1:, 1] - E[:, :, :-1, 1]
+    # curlx = dEz/dy - dEy/dz
+    curl[:, :-1, :, 0] += E[:, 1:, :, 2] - E[:, :-1, :, 2] #dEz/dy
+    curl[:, :, :-1, 0] -= E[:, :, 1:, 1] - E[:, :, :-1, 1] #dEy/dz
 
-    curl[:, :, :-1, 1] += E[:, :, 1:, 0] - E[:, :, :-1, 0]
-    curl[:-1, :, :, 1] -= E[1:, :, :, 2] - E[:-1, :, :, 2]
+    # curly = dEx/dz - dEz/dx
+    curl[:, :, :-1, 1] += E[:, :, 1:, 0] - E[:, :, :-1, 0] #dEx/dz
+    curl[:-1, :, :, 1] -= E[1:, :, :, 2] - E[:-1, :, :, 2] #dEz/dx
 
-    curl[:-1, :, :, 2] += E[1:, :, :, 1] - E[:-1, :, :, 1]
-    curl[:, :-1, :, 2] -= E[:, 1:, :, 0] - E[:, :-1, :, 0]
+    # curlz = dEy/dx - dEx/dy
+    curl[:-1, :, :, 2] += E[1:, :, :, 1] - E[:-1, :, :, 1] #dEy/dx
+    curl[:, :-1, :, 2] -= E[:, 1:, :, 0] - E[:, :-1, :, 0] #dEx/dy
 
     return curl
 
@@ -64,6 +67,7 @@ def curl_H(H: Tensorlike) -> Tensorlike:
     """
     curl = bd.zeros(H.shape,dtype=H.dtype)
 
+    # curlx = dHz/dy - dHy/dz
     curl[:, 1:, :, 0] += H[:, 1:, :, 2] - H[:, :-1, :, 2]
     curl[:, :, 1:, 0] -= H[:, :, 1:, 1] - H[:, :, :-1, 1]
 
@@ -350,10 +354,27 @@ class Grid:
         obj._register_grid(self)
         self.objects[name] = obj
     
+    # def promote_dtypes_to_complex(self):
+    #     self.E = self.E.astype(bd.complex)
+    #     self.H = self.H.astype(bd.complex)
+    #     [boundary.promote_dtypes_to_complex() for boundary in self.boundaries]
+    
     def promote_dtypes_to_complex(self):
-        self.E = self.E.astype(bd.complex)
-        self.H = self.H.astype(bd.complex)
-        [boundary.promote_dtypes_to_complex() for boundary in self.boundaries]
+        """Ensure all relevant arrays are converted to complex dtype."""
+        self.E = bd.array(self.E, dtype=bd.complex)
+        self.H = bd.array(self.H, dtype=bd.complex)
+        self.inverse_permittivity = bd.array(self.inverse_permittivity, dtype=bd.complex)
+        self.inverse_permeability = bd.array(self.inverse_permeability, dtype=bd.complex)
+
+        # for boundary in self.boundaries:
+        #     if hasattr(boundary, "promote_dtypes_to_complex"):
+        #         boundary.promote_dtypes_to_complex()
+        
+        for boundary in self.boundaries:
+            try:
+                boundary.promote_dtypes_to_complex()
+            except AttributeError:
+                pass
 
     def __setitem__(self, key, attr):
         if not isinstance(key, tuple):
@@ -512,3 +533,27 @@ class Grid:
             dic[detector.name + " (E)"] = _numpyfy(values['E'])
             dic[detector.name + " (H)"] = _numpyfy(values['H'])
         savez(path.join(self.folder, "detector_readings"), **dic)
+
+    def get_field_direction_index(self, direction: str) -> int:
+        """
+        回傳 E 或 H 張量的方向索引，根據使用者指定的方向字串（'x', 'y', 'z'）
+        自動適配 2D 或 3D 模擬中的軸長與錯誤防呆。
+
+        Args:
+            direction (str): 'x', 'y', or 'z'
+
+        Returns:
+            int: 對應的方向索引，將用在 grid.E[..., dir_idx]
+        """
+        dir_map = {"x": 0, "y": 1, "z": 2}
+        if direction not in dir_map:
+            raise ValueError(f"Invalid direction: {direction}. Use 'x', 'y', or 'z'.")
+
+        dir_idx = dir_map[direction]
+
+        # 若對應方向軸長為 1，則代表此方向不是空間維，而是場量方向，應轉向 axis=-1
+        spatial_axis_lengths = self.E.shape[:3]
+        if spatial_axis_lengths[dir_idx] == 1:
+            return dir_map[direction]  # 保持方向對應最後一維
+        else:
+            return dir_map[direction]
