@@ -1,0 +1,79 @@
+import numpy as np
+from math import pi
+from .backend import backend as bd
+from .sources import hanning
+
+
+class ComplexLineSource:
+    """
+    Complex-valued continuous-wave (CW) line source based on Flaport style.
+    """
+
+    def __init__(
+        self,
+        period: float,
+        amplitude: complex = 1.0 + 0.0j,
+        phase_shift: float = 0.0,
+        name: str = None,
+        pulse: bool = False,
+        cycle: int = 5,
+        hanning_dt: float = 1.0,
+    ):
+        self.grid = None
+        self.period = period
+        self.amplitude = np.complex64(amplitude)
+        self.phase_shift = phase_shift
+        self.name = name
+        self.pulse = pulse
+        self.cycle = cycle
+        self.hanning_dt = hanning_dt
+
+    def _register_grid(self, grid, x, y, z):
+        self.grid = grid
+        self.x, self.y, self.z = self.grid._handle_slices(x, y, z)
+
+        self.period = grid._handle_time(self.period)
+        self.frequency = 1.0 / self.period
+        self.omega = 2 * pi / self.period
+        self.hanning_dt = grid._handle_time(self.hanning_dt)
+
+        L = len(self.x)
+        vect = bd.array(
+            (bd.array(self.x) - self.x[L // 2]) ** 2
+            + (bd.array(self.y) - self.y[L // 2]) ** 2
+            + (bd.array(self.z) - self.z[L // 2]) ** 2,
+            bd.float,
+        )
+        self.profile = bd.exp(-(vect**2) / (2 * (0.5 * vect.max()) ** 2))
+        self.profile /= self.profile.sum()
+        self.profile *= self.amplitude
+
+        if self.name is not None:
+            setattr(grid, self.name, self)
+
+    def update_E(self):
+        q = self.grid.time_steps_passed
+
+        if self.pulse:
+            t1 = int(2 * pi / (self.frequency * self.hanning_dt / self.cycle))
+            if q < t1:
+                env = hanning(self.frequency, q * self.hanning_dt, self.cycle)
+                vect = self.profile * bd.exp(1j * (self.omega * q + self.phase_shift)) * env
+            else:
+                vect = self.profile * 0
+        else:
+            vect = self.profile * bd.exp(1j * (self.omega * q + self.phase_shift))
+
+        for x, y, z, value in zip(self.x, self.y, self.z, vect):
+            self.grid.E[x, y, z, 2] += value
+
+    def update_H(self):
+        pass
+
+    def promote_dtypes_to_complex(self):
+        self.amplitude = bd.complex(self.amplitude)
+        self.omega = bd.complex(self.omega)
+        self.profile = bd.complex(self.profile)
+
+    def __repr__(self):
+        return f"ComplexLineSource(period={self.period}, amplitude={self.amplitude})"
