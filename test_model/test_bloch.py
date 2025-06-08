@@ -55,10 +55,13 @@ source_y = to_grid(um(4), grid_spacing)
 
 grid[:, source_y:source_y+1, 0] = fdtd.ComplexLineSource(
     wavelength=wavelength,
+    period = wavelength / 3e8,
     amplitude=1.0 + 0j,
+    pulse=False,
     cycle=5,
-    # polarization='y',
+    hanning_dt=3e-17,
     name='cw_source'
+
 )
 
 # === 監視器：反射 y = 1 µm，穿透 y = 5 µm ===

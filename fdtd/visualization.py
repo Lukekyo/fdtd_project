@@ -70,7 +70,7 @@ def visualize(
     if norm not in ("linear", "lin", "log"):
         raise ValueError("Color map normalization should be 'linear' or 'log'.")
     # imports (placed here to circumvent circular imports)
-    from .sources import PointSource, LineSource, PlaneSource
+    from .sources import PointSource, LineSource, PlaneSource, ComplexLineSource
     from .boundaries import _PeriodicBoundaryX, _PeriodicBoundaryY, _PeriodicBoundaryZ
     from .boundaries import BlochBoundary
     from .boundaries import (
@@ -150,6 +150,17 @@ def visualize(
 
     for source in grid.sources:
         if isinstance(source, LineSource):
+            if x is not None:
+                _x = [source.y[0], source.y[-1]]
+                _y = [source.z[0], source.z[-1]]
+            elif y is not None:
+                _x = [source.z[0], source.z[-1]]
+                _y = [source.x[0], source.x[-1]]
+            elif z is not None:
+                _x = [source.x[0], source.x[-1]]
+                _y = [source.y[0], source.y[-1]]
+            plt.plot(_y, _x, lw=3, color=srccolor)
+        elif isinstance(source, ComplexLineSource):
             if x is not None:
                 _x = [source.y[0], source.y[-1]]
                 _y = [source.z[0], source.z[-1]]
