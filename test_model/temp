@@ -1,27 +1,25 @@
-def __init__(self, permittivity: Tensorlike = None, n: float = None, k: float = None, name: str = None):
-    """
-    Args:
-        permittivity: relative permittivity tensor (can be complex)
-        n: refractive index (real part)
-        k: extinction coefficient (imaginary part)
-        name: name of the object (will become available as attribute to the grid)
-    """
+def __init__(
+    self,
+    wavelength: float,
+    period: float,
+    amplitude: complex = 1.0 + 0.0j,
+    phase_shift: float = 0.0,
+    name: str = None,
+    polarization: str = 'z',
+):
+    """Create a ComplexPlaneSource with exp(iωt) waveform"""
     self.grid = None
+    self.wavelength = wavelength
+    self.period = period
+    self.frequency = 1.0 / period
+    self.amplitude = bd.complex(amplitude)
+    self.phase_shift = phase_shift
     self.name = name
+    self.polarization = polarization.lower()
+    self.omega = 2 * np.pi * bd.c0 / wavelength
 
-    # 優先使用 permittivity，如果沒有再試著從 n, k 推算
-    if permittivity is not None:
-        self.permittivity = bd.array(permittivity)
-    elif n is not None and k is not None:
-        epsilon_complex = (n + 1j * k) ** 2  # ε = (n + ik)^2 = n^2 - k^2 + 2ink
-        self.permittivity = bd.array(epsilon_complex)
-    else:
-        raise ValueError("You must provide either 'permittivity' or both 'n' and 'k'.")
-
-
-
-# 原用法（不變）
-obj_air = Object(permittivity=1.0, name="air")
-
-# 新用法（推薦）
-obj_si = Object(n=3.45, k=0.1, name="silicon")
+def update_E(self):
+    """Add the complex exponential source to the electric field"""
+    q = self.grid.time_steps_passed
+    vect = self.profile * bd.exp(1j * (self.omega * q + self.phase_shift))
+    self.grid.E[self.x, self.y, self.z, self._Epol] = vect
