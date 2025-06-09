@@ -499,7 +499,7 @@ class PlaneSource:
         s += f"        @ x={x}, y={y}, z={z}\n"
         return s
 
-
+# ComplexLineSource class
 class ComplexLineSource:
     """A source along a line in the FDTD grid"""
 
@@ -672,29 +672,29 @@ class ComplexLineSource:
         s += f"        @ x={x}, y={y}, z={z}\n"
         return s
 
+## ComplexPlaneSource class
 class ComplexPlaneSource:
-    """Complex-valued continuous-wave (CW) plane source."""
-
+    """A source along a plane in the FDTD grid"""
     def __init__(
         self,
         wavelength: float,
-        amplitude: complex = 1.0,
+        period: float,
+        amplitude: complex = 1.0 + 0.0j,
+        phase_shift: float = 0.0,
         name: str = None,
-        cycle: int = 0,
-        offset: float = 0.0,
-        hanning_dt: float = None,
-        polarization: str = "z"
+        polarization: str = 'z',
     ):
+        """Create a ComplexPlaneSource with exp(iωt) waveform"""
         self.grid = None
         self.wavelength = wavelength
+        self.period = period
+        self.frequency = 1.0 / period
         self.amplitude = bd.complex(amplitude)
-        self.omega = 2 * np.pi * bd.c0 / wavelength
+        self.phase_shift = phase_shift
         self.name = name
-        self.cycle = cycle
-        self.offset = offset
-        self.hanning_dt = hanning_dt if hanning_dt is not None else 0.5 / self.frequency
         self.polarization = polarization.lower()
-
+        self.omega = 2 * np.pi * bd.c0 / wavelength
+        
     def _register_grid(
         self, grid: Grid, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice
     ):
@@ -707,7 +707,7 @@ class ComplexPlaneSource:
             z: The z-location of the source in the grid
 
         Note:
-            As its name suggests, this source is a LINE source.
+        As its name suggests, this source is a LINE source.
             Hence the source spans the diagonal of the cube
             defined by the slices in the grid.
         """
@@ -721,30 +721,28 @@ class ComplexPlaneSource:
                     f"The grid already has an attribute with name {self.name}"
                 )
 
-        self.x, self.y, self.z = self._handle_slices(x, y, z) # convert slices to lists
+        self.x, self.y, self.z = self._handle_slices(x, y, z)
 
-        self.period = grid._handle_time(self.period) # convert to time
-        self.frequency = 1.0 / self.period # convert to frequency
+        self.period = grid._handle_time(self.period)
+        self.frequency = 1.0 / self.period
 
-        L = len(self.x) # length of the line
-        vect = bd.array(
-            (bd.array(self.x) - self.x[L // 2]) ** 2
-            + (bd.array(self.y) - self.y[L // 2]) ** 2
-            + (bd.array(self.z) - self.z[L // 2]) ** 2,
-            bd.float,
-        ) # distance from the center of the line, only work for uniform grid
+        x = bd.arange(self.x.start, self.x.stop, 1) - (self.x.start + self.x.stop) // 2
+        y = bd.arange(self.y.start, self.y.stop, 1) - (self.y.start + self.y.stop) // 2
+        z = bd.arange(self.z.start, self.z.stop, 1) - (self.z.start + self.z.stop) // 2
+        xvec, yvec, zvec = bd.broadcast_arrays( # broadcast the x, y and z arrays
+            x[:, None, None], y[None, :, None], z[None, None, :]
+        )
+        _xvec = bd.array(xvec, float)
+        _yvec = bd.array(yvec, float)
+        _zvec = bd.array(zvec, float)
 
-        self.profile = bd.exp(-(vect ** 2) / (2 * (0.5 * vect.max()) ** 2)) # gaussian profile
-        self.profile /= self.profile.sum() # normalize the profile
-        self.profile *= self.amplitude # scale the profile to the amplitude
+        profile = bd.ones(_xvec.shape)
+        self.profile = self.amplitude * profile
 
     def _handle_slices(
         self, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice
     ) -> Tuple[List, List, List]:
-        """Convert slices in the grid to lists
-
-        This is necessary to make the source span the diagonal of the volume
-        defined by the slices.
+        """Validate slices and calculate center of plane
 
         Args:
             x: The x-location of the volume in the grid
@@ -752,41 +750,27 @@ class ComplexPlaneSource:
             z: The z-location of the volume in the grid
 
         Returns:
-            x, y, z: the x, y and z coordinates of the source as lists
+            x, y, z: the x, y and z coordinates of the source as slices
 
         """
-
-        # if list-indices were chosen:
-        if isinstance(x, list) and isinstance(y, list) and isinstance(z, list):
-            if len(x) != len(y) or len(y) != len(z) or len(z) != len(x):
-                raise IndexError(
-                    "sources require grid to be indexed with slices or equal length list-indices"
-                )
-            x = [self.grid._handle_distance(_x) for _x in x]
-            y = [self.grid._handle_distance(_y) for _y in y]
-            z = [self.grid._handle_distance(_z) for _z in z]
-            return x, y, z
-
-        # if a combination of list-indices and slices were chosen,
-        # convert the list-indices to slices.
-        # TODO: maybe issue a warning here?
-        if isinstance(x, list):
+        # ensure all slices
+        if not isinstance(x, slice):
+            if isinstance(x, list):
+                (x,) = x
             x = slice(
-                self.grid._handle_distance(x[0]),
-                self.grid._handle_distance(x[-1]),
-                None,
+                self.grid._handle_distance(x), self.grid._handle_distance(x) + 1, None
             )
-        if isinstance(y, list):
+        if not isinstance(y, slice):
+            if isinstance(y, list):
+                (y,) = y
             y = slice(
-                self.grid._handle_distance(y[0]),
-                self.grid._handle_distance(y[-1]),
-                None,
+                self.grid._handle_distance(y), self.grid._handle_distance(y) + 1, None
             )
-        if isinstance(z, list):
+        if not isinstance(z, slice):
+            if isinstance(z, list):
+                (z,) = z
             z = slice(
-                self.grid._handle_distance(z[0]),
-                self.grid._handle_distance(z[-1]),
-                None,
+                self.grid._handle_distance(z), self.grid._handle_distance(z) + 1, None
             )
 
         # if we get here, we can assume slices:
@@ -797,37 +781,70 @@ class ComplexPlaneSource:
         y1 = self.grid._handle_distance(y.stop if y.stop is not None else self.grid.Ny)
         z1 = self.grid._handle_distance(z.stop if z.stop is not None else self.grid.Nz)
 
-        # we can now convert these coordinates into index lists
-        m = max(abs(x1 - x0), abs(y1 - y0), abs(z1 - z0))
-        if m < 2:
-            raise ValueError("a LineSource should consist of at least two gridpoints")
-        x = [v.item() for v in bd.array(bd.linspace(x0, x1, m, endpoint=False), bd.int)]
-        y = [v.item() for v in bd.array(bd.linspace(y0, y1, m, endpoint=False), bd.int)]
-        z = [v.item() for v in bd.array(bd.linspace(z0, z1, m, endpoint=False), bd.int)]
+        # make sure all slices have a start, stop and no step:
+        x = (
+            slice(x0, x1)
+            if x0 < x1
+            else (slice(x1, x0) if x0 > x1 else slice(x0, x0 + 1))
+        )
+        y = (
+            slice(y0, y1)
+            if y0 < y1
+            else (slice(y1, y0) if y0 > y1 else slice(y0, y0 + 1))
+        )
+        z = (
+            slice(z0, z1)
+            if z0 < z1
+            else (slice(z1, z0) if z0 > z1 else slice(z0, z0 + 1))
+        )
+
+        if [x.stop - x.start, y.stop - y.start, z.stop - z.start].count(0) > 0:
+            raise ValueError(
+                "Given location for PlaneSource results in slices of length 0!"
+            )
+        if [x.stop - x.start, y.stop - y.start, z.stop - z.start].count(1) == 0:
+            raise ValueError("Given location for PlaneSource is not a 2D plane!")
+        if [x.stop - x.start, y.stop - y.start, z.stop - z.start].count(1) > 1:
+            raise ValueError(
+                "Given location for PlaneSource should have no more than one dimension in which it's flat.\n"
+                "Use a LineSource for lower dimensional sources."
+            )
+
+        self._Epol = 'xyz'.index(self.polarization)
+        if (x.stop - x.start == 1 and self.polarization == 'x') or \
+           (y.stop - y.start == 1 and self.polarization == 'y') or \
+           (z.stop - z.start == 1 and self.polarization == 'z'):
+            raise ValueError(
+                "PlaneSource cannot be polarized perpendicular to the orientation of the plane."
+            )
+        _Hpols = [(z,1,2), (z,0,2), (y,0,1)][self._Epol]
+        if _Hpols[0].stop - _Hpols[0].start == 1:
+            self._Hpol = _Hpols[1]
+        else:
+            self._Hpol = _Hpols[2]
 
         return x, y, z
 
-
     def update_E(self):
-        t = self.grid.time_steps_passed
-        t_real = t * self.grid.time_step + self.offset
+        """Add the complex exponential source to the electric field"""
+        q = self.grid.time_steps_passed
+        vect = self.profile * bd.exp(1j * (self.omega * q + self.phase_shift))
+        self.grid.E[self.x, self.y, self.z, self._Epol] = vect
 
-        if self.cycle > 0:
-            T = self.cycle * self.grid.time_step
-            if self.hanning_dt is not None:
-                envelope = 0.5 - 0.5 * bd.cos(2 * np.pi * t_real / (T + self.hanning_dt))
-            else:
-                envelope = bd.ones_like(t_real)
-            envelope *= (t_real <= T)
-        else:
-            envelope = 1.0
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}(period={self.period}, "
+            f"amplitude={self.amplitude}, phase_shift={self.phase_shift}, "
+            f"name={repr(self.name)}, polarization={repr(self.polarization)})"
+        )
 
-        Ez = self.amplitude * bd.exp(1j * self.omega * t_real) * envelope
-        idx = {"x": 0, "y": 1, "z": 2}[self.polarization]
-        self.grid.E[self.x, self.y, self.z, idx] += Ez
-
-    def update_H(self):
-        pass
+    def __str__(self):
+        s = "    " + repr(self) + "\n"
+        x = f"[{self.x.start}, ... , {self.x.stop}]"
+        y = f"[{self.y.start}, ... , {self.y.stop}]"
+        z = f"[{self.z.start}, ... , {self.z.stop}]"
+        s += f"        @ x={x}, y={y}, z={z}\n"
+        return s
 
 class SoftArbitraryPointSource:
     r"""

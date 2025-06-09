@@ -40,7 +40,8 @@ simfolder = grid.save_simulation("test_bloch")
 # === 材料：y = 3 ~ 3.5 µm，n = 1.5 ===
 start_y = to_grid(um(3), grid_spacing)
 end_y = to_grid(um(3.5), grid_spacing)
-grid[:, start_y:end_y, 0] = fdtd.Object(permittivity=1.5**2, name="material")
+# grid[:, start_y:end_y, 0] = fdtd.Object(permittivity=1.5**2, name="material")
+grid[:, start_y:end_y, 0] = fdtd.Object(n=1.5,k=0, name="n=1.5")
 
 # === 光源：y = 4 µm，連續波 ===
 source_y = to_grid(um(4), grid_spacing)
@@ -53,22 +54,28 @@ source_y = to_grid(um(4), grid_spacing)
 #     hanning_dt=None
 # )
 
-grid[:, source_y:source_y+1, 0] = fdtd.ComplexLineSource(
+# grid[:, source_y:source_y+1, 0] = fdtd.ComplexLineSource(
+#     wavelength=wavelength,
+#     period = wavelength / 3e8,
+#     amplitude=1.0 + 0j,
+#     pulse=False,
+#     cycle=5,
+#     name='cw_source'
+# )
+
+grid[:, source_y:source_y+1, :] = fdtd.ComplexPlaneSource(
     wavelength=wavelength,
     period = wavelength / 3e8,
     amplitude=1.0 + 0j,
-    pulse=False,
-    cycle=5,
-    hanning_dt=3e-17,
-    name='cw_source'
-
+    # polarization='z',
+    name='cw_plane'
 )
 
 # === 監視器：反射 y = 1 µm，穿透 y = 5 µm ===
 det_y1 = to_grid(um(1), grid_spacing)
 det_y2 = to_grid(um(5), grid_spacing)
-grid[:, det_y1:det_y1+1, 0] = fdtd.LineDetector(name="detector_reflect")
-grid[:, det_y2:det_y2+1, 0] = fdtd.LineDetector(name="detector_transmit")
+grid[:, det_y1:det_y1+1, 0] = fdtd.LineDetector(name="detector_transmit")
+grid[:, det_y2:det_y2+1, 0] = fdtd.LineDetector(name="detector_reflect")
 
 # === 執行模擬 ===
 for t in range(500):
@@ -88,15 +95,15 @@ for t in range(500):
 grid.save_data()
 
 # === 後處理 ===
-Ez_R = np.array(grid.detector_reflect.detector_values()["E"])[..., 2]
 Ez_T = np.array(grid.detector_transmit.detector_values()["E"])[..., 2]
-intensity_R = np.sum(np.abs(Ez_R)**2, axis=1)
+Ez_R = np.array(grid.detector_reflect.detector_values()["E"])[..., 2]
 intensity_T = np.sum(np.abs(Ez_T)**2, axis=1)
+intensity_R = np.sum(np.abs(Ez_R)**2, axis=1)
 
 # === 畫出穿透與反射 ===
 plt.figure()
-plt.plot(intensity_R, label="Reflected Intensity (y=1 µm)")
-plt.plot(intensity_T, label="Transmitted Intensity (y=5 µm)")
+plt.plot(intensity_T, label="Transmitted Intensity (y=1 µm)")
+plt.plot(intensity_R, label="Reflected Intensity (y=5 µm)")
 plt.title("Intensity vs Time step")
 plt.xlabel("Time step")
 plt.ylabel("Intensity (|Ez|^2 summed)")

@@ -24,15 +24,36 @@ from . import constants as const
 class Object:
     """An object to place in the grid"""
 
-    def __init__(self, permittivity: Tensorlike, name: str = None):
+    # def __init__(self, permittivity: Tensorlike, name: str = None):
+    #     """
+    #     Args:
+    #         permittivity: permittivity tensor
+    #         name: name of the object (will become available as attribute to the grid)
+    #     """
+    #     self.grid = None
+    #     self.name = name
+    #     self.permittivity = bd.array(permittivity)
+
+    def __init__(self, permittivity: Tensorlike = None, n: float = None, k: float = None, name: str = None):
         """
         Args:
-            permittivity: permittivity tensor
+            permittivity: relative permittivity tensor (can be complex)
+            n: refractive index (real part)
+            k: extinction coefficient (imaginary part)
             name: name of the object (will become available as attribute to the grid)
         """
         self.grid = None
         self.name = name
-        self.permittivity = bd.array(permittivity)
+
+        # 優先使用 permittivity，如果沒有再試著從 n, k 推算
+        if permittivity is not None:
+            self.permittivity = bd.array(permittivity)
+        elif n is not None and k is not None:
+            epsilon_complex = (n + 1j * k) ** 2  # ε = (n + ik)^2 = n^2 - k^2 + 2ink
+            self.permittivity = bd.array(epsilon_complex)
+        else:
+            raise ValueError("You must provide either 'permittivity' or both 'n' and 'k'.")
+
 
     def _register_grid(
         self, grid: Grid, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice
