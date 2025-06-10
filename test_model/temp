@@ -1,25 +1,83 @@
-def __init__(
-    self,
-    wavelength: float,
-    period: float,
-    amplitude: complex = 1.0 + 0.0j,
-    phase_shift: float = 0.0,
-    name: str = None,
-    polarization: str = 'z',
-):
-    """Create a ComplexPlaneSource with exp(iωt) waveform"""
-    self.grid = None
-    self.wavelength = wavelength
-    self.period = period
-    self.frequency = 1.0 / period
-    self.amplitude = bd.complex(amplitude)
-    self.phase_shift = phase_shift
-    self.name = name
-    self.polarization = polarization.lower()
-    self.omega = 2 * np.pi * bd.c0 / wavelength
+import numpy as np
+from .grid import Grid
+from .backend import backend as bd
+from .typing_ import ListOrSlice
+from .sources import hanning  # 確保你有 hanning 函數可用
 
-def update_E(self):
-    """Add the complex exponential source to the electric field"""
-    q = self.grid.time_steps_passed
-    vect = self.profile * bd.exp(1j * (self.omega * q + self.phase_shift))
-    self.grid.E[self.x, self.y, self.z, self._Epol] = vect
+class ComplexPlaneWave2D:
+    """A 2D plane wave source (Ez polarization)"""
+
+    def __init__(
+        self,
+        wavelength: float,
+        amplitude: complex = 1.0 + 0.0j,
+        phase_shift: float = 0.0,
+        name: str = None,
+        pulse: bool = False,
+        cycle: int = 5,
+        hanning_dt: float = 1.0,
+    ):
+        self.grid = None
+        self.wavelength = wavelength
+        self.amplitude = bd.complex(amplitude)
+        self.omega = 2 * np.pi * bd.c0 / wavelength
+        self.phase_shift = phase_shift
+        self.name = name
+        self.pulse = pulse
+        self.cycle = cycle
+        self.hanning_dt = hanning_dt
+
+    def _register_grid(
+        self, grid: Grid, x: ListOrSlice, y: ListOrSlice
+    ):
+        """Register a 2D grid for the source (Ez mode)"""
+        self.grid = grid
+        self.grid.sources.append(self)
+        if self.name is not None:
+            if not hasattr(grid, self.name):
+                setattr(grid, self.name, self)
+
+        self.x = self._handle_slice(x, max_index=grid.Nx)
+        self.y = self._handle_slice(y, max_index=grid.Ny)
+        self.z = 0  # 固定在 z=0 平面
+
+        # 初始化空間 profile（線性平面波，常數 profile）
+        Nx = self.x.stop - self.x.start
+        self.profile = bd.ones((Nx,), dtype=bd.complex)
+        self.profile *= self.amplitude
+
+        self.frequency = self.omega / (2 * np.pi)
+
+    def _handle_slice(self, s: ListOrSlice, max_index: int = None) -> slice:
+        if isinstance(s, slice):
+            start = s.start if s.start is not None else 0
+            stop = s.stop if s.stop is not None else max_index
+            return slice(start, stop)
+        if isinstance(s, list):
+            if len(s) == 1:
+                return slice(s[0], s[0] + 1)
+            raise IndexError("Only slices or single indices are supported.")
+        raise TypeError("Invalid grid index format.")
+
+    def update_E(self):
+        q = self.grid.time_steps_passed
+
+        if self.pulse:
+            t1 = int(2 * np.pi / (self.frequency * self.hanning_dt / self.cycle))
+            if q < t1:
+                envelope = hanning(self.frequency, q * self.hanning_dt, self.cycle)
+                value = self.profile * bd.exp(1j * (self.omega * q + self.phase_shift)) * envelope
+            else:
+                value = 0
+        else:
+            value = self.profile * bd.exp(1j * (self.omega * q + self.phase_shift))
+
+        for ix in range(self.x.start, self.x.stop):
+            for iy in range(self.y.start, self.y.stop):
+                self.grid.E[ix, iy, self.z, 2] += value[ix - self.x.start]
+
+    def update_H(self):
+        pass
+
+    def __repr__(self):
+        return f"ComplexPlaneWave2D(wl={self.wavelength}, amp={self.amplitude})"
