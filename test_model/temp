@@ -1,15 +1,16 @@
 import numpy as np
-from .grid import Grid
 from .backend import backend as bd
 from .typing_ import ListOrSlice
-from .sources import hanning  # 確保你有 hanning 函數可用
+from .grid import Grid
+from .sources import hanning  # 確保 hanning() 有 import
 
-class ComplexPlaneWave2D:
-    """A 2D plane wave source (Ez polarization)"""
+class ComplexPlaneSource2D:
+    """A 2D Ez-polarized plane wave source"""
 
     def __init__(
         self,
         wavelength: float,
+        period: float,
         amplitude: complex = 1.0 + 0.0j,
         phase_shift: float = 0.0,
         name: str = None,
@@ -19,6 +20,8 @@ class ComplexPlaneWave2D:
     ):
         self.grid = None
         self.wavelength = wavelength
+        self.period = period
+        self.frequency = 1.0 / period
         self.amplitude = bd.complex(amplitude)
         self.omega = 2 * np.pi * bd.c0 / wavelength
         self.phase_shift = phase_shift
@@ -28,36 +31,38 @@ class ComplexPlaneWave2D:
         self.hanning_dt = hanning_dt
 
     def _register_grid(
-        self, grid: Grid, x: ListOrSlice, y: ListOrSlice
+        self, grid: Grid, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice
     ):
-        """Register a 2D grid for the source (Ez mode)"""
         self.grid = grid
         self.grid.sources.append(self)
         if self.name is not None:
             if not hasattr(grid, self.name):
                 setattr(grid, self.name, self)
 
-        self.x = self._handle_slice(x, max_index=grid.Nx)
-        self.y = self._handle_slice(y, max_index=grid.Ny)
-        self.z = 0  # 固定在 z=0 平面
+        # 儲存 slice 區間（與 ComplexLineSource 相同）
+        self.x, self.y, self.z = self._handle_slices(x, y, z)
 
-        # 初始化空間 profile（線性平面波，常數 profile）
-        Nx = self.x.stop - self.x.start
-        self.profile = bd.ones((Nx,), dtype=bd.complex)
-        self.profile *= self.amplitude
+        # 平面波：profile 為常數 1
+        L = len(self.x)
+        self.profile = bd.ones(L, dtype=bd.complex) * self.amplitude
 
-        self.frequency = self.omega / (2 * np.pi)
+    def _handle_slices(
+        self, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice
+    ):
+        """與 ComplexLineSource 相同邏輯：轉成 list"""
+        x0 = self.grid._handle_distance(x.start if x.start is not None else 0)
+        x1 = self.grid._handle_distance(x.stop if x.stop is not None else self.grid.Nx)
+        y0 = self.grid._handle_distance(y.start if y.start is not None else 0)
+        y1 = self.grid._handle_distance(y.stop if y.stop is not None else self.grid.Ny)
+        z0 = self.grid._handle_distance(z.start if z.start is not None else 0)
+        z1 = self.grid._handle_distance(z.stop if z.stop is not None else self.grid.Nz)
 
-    def _handle_slice(self, s: ListOrSlice, max_index: int = None) -> slice:
-        if isinstance(s, slice):
-            start = s.start if s.start is not None else 0
-            stop = s.stop if s.stop is not None else max_index
-            return slice(start, stop)
-        if isinstance(s, list):
-            if len(s) == 1:
-                return slice(s[0], s[0] + 1)
-            raise IndexError("Only slices or single indices are supported.")
-        raise TypeError("Invalid grid index format.")
+        m = max(abs(x1 - x0), abs(y1 - y0), abs(z1 - z0))
+        x = [v.item() for v in bd.array(bd.linspace(x0, x1, m, endpoint=False), bd.int)]
+        y = [v.item() for v in bd.array(bd.linspace(y0, y1, m, endpoint=False), bd.int)]
+        z = [v.item() for v in bd.array(bd.linspace(z0, z1, m, endpoint=False), bd.int)]
+
+        return x, y, z
 
     def update_E(self):
         q = self.grid.time_steps_passed
@@ -65,19 +70,30 @@ class ComplexPlaneWave2D:
         if self.pulse:
             t1 = int(2 * np.pi / (self.frequency * self.hanning_dt / self.cycle))
             if q < t1:
-                envelope = hanning(self.frequency, q * self.hanning_dt, self.cycle)
-                value = self.profile * bd.exp(1j * (self.omega * q + self.phase_shift)) * envelope
+                env = hanning(self.frequency, q * self.hanning_dt, self.cycle)
+                vect = self.profile * bd.exp(1j * (self.omega * q + self.phase_shift)) * env
             else:
-                value = 0
+                vect = 0
         else:
-            value = self.profile * bd.exp(1j * (self.omega * q + self.phase_shift))
+            vect = self.profile * bd.exp(1j * (self.omega * q + self.phase_shift))
 
-        for ix in range(self.x.start, self.x.stop):
-            for iy in range(self.y.start, self.y.stop):
-                self.grid.E[ix, iy, self.z, 2] += value[ix - self.x.start]
+        for x, y, z, value in zip(self.x, self.y, self.z, vect):
+            self.grid.E[x, y, z, 2] += value
 
     def update_H(self):
         pass
 
     def __repr__(self):
-        return f"ComplexPlaneWave2D(wl={self.wavelength}, amp={self.amplitude})"
+        return (
+            f"{self.__class__.__name__}(period={self.period}, "
+            f"amplitude={self.amplitude}, phase_shift={self.phase_shift}, "
+            f"name={repr(self.name)})"
+        )
+
+    def __str__(self):
+        s = "    " + repr(self) + "\n"
+        x = f"[{self.x[0]}, ... , {self.x[-1]}]"
+        y = f"[{self.y[0]}, ... , {self.y[-1]}]"
+        z = f"[{self.z[0]}, ... , {self.z[-1]}]"
+        s += f"        @ x={x}, y={y}, z={z}\n"
+        return s
