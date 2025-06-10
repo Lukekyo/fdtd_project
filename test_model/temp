@@ -1,99 +1,56 @@
 import numpy as np
-from .backend import backend as bd
-from .typing_ import ListOrSlice
-from .grid import Grid
-from .sources import hanning  # 確保 hanning() 有 import
 
-class ComplexPlaneSource2D:
-    """A 2D Ez-polarized plane wave source"""
+def fresnel_coefficients(n1, n2, theta_i_deg, polarization='s'):
+    """
+    計算菲涅爾反射與透射係數（振幅與能量）.
 
-    def __init__(
-        self,
-        wavelength: float,
-        period: float,
-        amplitude: complex = 1.0 + 0.0j,
-        phase_shift: float = 0.0,
-        name: str = None,
-        pulse: bool = False,
-        cycle: int = 5,
-        hanning_dt: float = 1.0,
-    ):
-        self.grid = None
-        self.wavelength = wavelength
-        self.period = period
-        self.frequency = 1.0 / period
-        self.amplitude = bd.complex(amplitude)
-        self.omega = 2 * np.pi * bd.c0 / wavelength
-        self.phase_shift = phase_shift
-        self.name = name
-        self.pulse = pulse
-        self.cycle = cycle
-        self.hanning_dt = hanning_dt
+    參數:
+    - n1: 入射介質折射率
+    - n2: 透射介質折射率
+    - theta_i_deg: 入射角 (degrees)
+    - polarization: 's' 或 'p' 偏振
 
-    def _register_grid(
-        self, grid: Grid, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice
-    ):
-        self.grid = grid
-        self.grid.sources.append(self)
-        if self.name is not None:
-            if not hasattr(grid, self.name):
-                setattr(grid, self.name, self)
+    回傳:
+    - r: 振幅反射係數
+    - t: 振幅透射係數
+    - R: 能量反射率
+    - T: 能量透射率
+    """
 
-        # 儲存 slice 區間（與 ComplexLineSource 相同）
-        self.x, self.y, self.z = self._handle_slices(x, y, z)
+    theta_i = np.radians(theta_i_deg)
+    sin_theta_t = n1 / n2 * np.sin(theta_i)
 
-        # 平面波：profile 為常數 1
-        L = len(self.x)
-        self.profile = bd.ones(L, dtype=bd.complex) * self.amplitude
+    # 全反射檢查
+    if np.abs(sin_theta_t) > 1:
+        return np.nan, np.nan, 1.0, 0.0  # 全反射：R=1, T=0
 
-    def _handle_slices(
-        self, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice
-    ):
-        """與 ComplexLineSource 相同邏輯：轉成 list"""
-        x0 = self.grid._handle_distance(x.start if x.start is not None else 0)
-        x1 = self.grid._handle_distance(x.stop if x.stop is not None else self.grid.Nx)
-        y0 = self.grid._handle_distance(y.start if y.start is not None else 0)
-        y1 = self.grid._handle_distance(y.stop if y.stop is not None else self.grid.Ny)
-        z0 = self.grid._handle_distance(z.start if z.start is not None else 0)
-        z1 = self.grid._handle_distance(z.stop if z.stop is not None else self.grid.Nz)
+    theta_t = np.arcsin(sin_theta_t)
 
-        m = max(abs(x1 - x0), abs(y1 - y0), abs(z1 - z0))
-        x = [v.item() for v in bd.array(bd.linspace(x0, x1, m, endpoint=False), bd.int)]
-        y = [v.item() for v in bd.array(bd.linspace(y0, y1, m, endpoint=False), bd.int)]
-        z = [v.item() for v in bd.array(bd.linspace(z0, z1, m, endpoint=False), bd.int)]
+    cos_theta_i = np.cos(theta_i)
+    cos_theta_t = np.cos(theta_t)
 
-        return x, y, z
+    if polarization == 's':
+        r = (n1 * cos_theta_i - n2 * cos_theta_t) / (n1 * cos_theta_i + n2 * cos_theta_t)
+        t = (2 * n1 * cos_theta_i) / (n1 * cos_theta_i + n2 * cos_theta_t)
+    elif polarization == 'p':
+        r = (n2 * cos_theta_i - n1 * cos_theta_t) / (n2 * cos_theta_i + n1 * cos_theta_t)
+        t = (2 * n1 * cos_theta_i) / (n2 * cos_theta_i + n1 * cos_theta_t)
+    else:
+        raise ValueError("Polarization must be 's' or 'p'")
 
-    def update_E(self):
-        q = self.grid.time_steps_passed
+    R = abs(r)**2
+    T = (n2 * cos_theta_t) / (n1 * cos_theta_i) * abs(t)**2
 
-        if self.pulse:
-            t1 = int(2 * np.pi / (self.frequency * self.hanning_dt / self.cycle))
-            if q < t1:
-                env = hanning(self.frequency, q * self.hanning_dt, self.cycle)
-                vect = self.profile * bd.exp(1j * (self.omega * q + self.phase_shift)) * env
-            else:
-                vect = 0
-        else:
-            vect = self.profile * bd.exp(1j * (self.omega * q + self.phase_shift))
+    return r, t, R, T
 
-        for x, y, z, value in zip(self.x, self.y, self.z, vect):
-            self.grid.E[x, y, z, 2] += value
+# 範例：空氣到矽（n2=3.48）入射角 60°
+n1 = 1.0
+n2 = 3.48
+theta_i_deg = 60
 
-    def update_H(self):
-        pass
-
-    def __repr__(self):
-        return (
-            f"{self.__class__.__name__}(period={self.period}, "
-            f"amplitude={self.amplitude}, phase_shift={self.phase_shift}, "
-            f"name={repr(self.name)})"
-        )
-
-    def __str__(self):
-        s = "    " + repr(self) + "\n"
-        x = f"[{self.x[0]}, ... , {self.x[-1]}]"
-        y = f"[{self.y[0]}, ... , {self.y[-1]}]"
-        z = f"[{self.z[0]}, ... , {self.z[-1]}]"
-        s += f"        @ x={x}, y={y}, z={z}\n"
-        return s
+for pol in ['s', 'p']:
+    r, t, R, T = fresnel_coefficients(n1, n2, theta_i_deg, polarization=pol)
+    print(f"{pol}-polarization:")
+    print(f"  r = {r:.4f}, t = {t:.4f}")
+    print(f"  R = {R:.4f}, T = {T:.4f}")
+    print()
