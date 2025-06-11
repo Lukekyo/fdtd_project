@@ -175,6 +175,9 @@ class NumpyBackend(Backend):
     arange = _replace_float(numpy.arange)
     """ create a range of values """
 
+    real = _replace_float(numpy.real)
+    """ create a range of values """
+
     pad = staticmethod(numpy.pad)
 
     fftfreq = staticmethod(numpy.fft.fftfreq)
