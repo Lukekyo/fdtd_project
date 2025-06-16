@@ -1,34 +1,63 @@
-import os
-import re
-import pandas as pd
+import numpy as np
 
-# 修改為你自己電腦上 repo 的路徑
-repo_path = "/你的路徑/fdtd_project"
+class DirectionalComplexPlaneWave2D:
+    """
+    A 2D directional complex plane wave source (Ez polarization)
+    Emits wave only in specified direction ('x+' or 'x-')
+    """
 
-patterns = {
-    "float_dtype": re.compile(r"dtype\s*=\s*(np\.)?(float32|float64)"),
-    "real_access": re.compile(r"\.real"),
-    "imag_access": re.compile(r"\.imag"),
-    "np_zeros": re.compile(r"np\.zeros\s*\(.*\)"),
-    "np_empty": re.compile(r"np\.empty\s*\(.*\)")
-}
+    def __init__(
+        self,
+        wavelength: float,
+        period: float,
+        amplitude: complex = 1.0 + 0.0j,
+        phase_shift: float = 0.0,
+        direction: str = "x+",
+        name: str = None,
+        pulse: bool = False,
+        cycle: int = 5,
+    ):
+        self.wavelength = wavelength
+        self.period = period
+        self.amplitude = amplitude
+        self.phase_shift = phase_shift
+        self.name = name
+        self.pulse = pulse
+        self.cycle = cycle
+        self.direction = direction
+        self.grid = None  # To be set after adding to simulation
 
-findings = {key: [] for key in patterns}
+    def bind_grid(self, grid):
+        self.grid = grid
+        self.time_step = grid.time_step
+        self.omega = 2 * np.pi / self.period
+        self.k = 2 * np.pi / self.wavelength
+        self.t0 = self.cycle * self.period / self.time_step if self.pulse else 0
 
-for root, dirs, files in os.walk(repo_path):
-    for file in files:
-        if file.endswith(".py"):
-            filepath = os.path.join(root, file)
-            with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
-                lines = f.readlines()
-                for i, line in enumerate(lines):
-                    for key, pattern in patterns.items():
-                        if pattern.search(line):
-                            findings[key].append((filepath, i + 1, line.strip()))
+    def update_E(self, t):
+        if self.grid is None:
+            raise ValueError("Grid not bound. Call bind_grid(grid) after adding source.")
 
-# 輸出成 CSV 檔案
-for key, records in findings.items():
-    if records:
-        df = pd.DataFrame(records, columns=["File", "Line", "Code"])
-        df.to_csv(f"scan_{key}.csv", index=False)
-        print(f"Exported scan_{key}.csv with {len(df)} findings.")
+        # Get grid info
+        Nx, Ny = self.grid.shape[0], self.grid.shape[1]
+        X, Y = np.meshgrid(np.arange(Nx), np.arange(Ny), indexing="ij")
+
+        # Time factor (Gaussian or continuous wave)
+        if self.pulse:
+            envelope = np.exp(-((t - self.t0) / (0.5 * self.t0))**2)
+        else:
+            envelope = 1.0
+
+        phase = self.k * X - self.omega * t + self.phase_shift
+        Ez = envelope * self.amplitude * np.exp(1j * phase)
+
+        # Directional filtering
+        if self.direction == "x+":
+            Ez[X < Nx // 2] = 0
+        elif self.direction == "x-":
+            Ez[X > Nx // 2] = 0
+        else:
+            raise ValueError("Invalid direction. Use 'x+' or 'x-'.")
+
+        # Update Ez field (assumes Ez polarization at z=0)
+        self.grid.E[:, :, 0] += Ez.real  # or use complex if your grid supports it
