@@ -136,7 +136,27 @@ class LineDetector:
 
     def detector_values(self):
         """ outputs what detector detects """
-        return {"E": self.E, "H": self.H}
+        # return {"E": self.E, 
+        #         "Ex": self.E[..., 0],
+        #         "Ey": self.E[..., 1],
+        #         "Ez": self.E[..., 2],
+        #         "H": self.H,
+        #         "Hx": self.H[..., 0],
+        #         "Hy": self.H[..., 1],
+        #         "Hz": self.H[..., 2],}
+        E_array = bd.array(self.E)  # 將 self.E 轉換為陣列
+        H_array = bd.array(self.H)  # 將 self.H 轉換為陣列
+
+        return {
+            "E": E_array,
+            "Ex": E_array[..., 0],
+            "Ey": E_array[..., 1],
+            "Ez": E_array[..., 2],
+            "H": H_array,
+            "Hx": H_array[..., 0],
+            "Hy": H_array[..., 1],
+            "Hz": H_array[..., 2],
+        }
 
 
 # is the "detector" paradigm necessary? Can we just flag a segment of the base mesh to be

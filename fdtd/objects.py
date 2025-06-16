@@ -265,7 +265,7 @@ class AnisotropicObject(Object):
             z: the z-location of the object in the grid
         """
         super()._register_grid(grid=grid, x=x, y=y, z=z)
-        eye = bd.zeros((self.Nx * self.Ny * self.Nz, 3, 3))
+        eye = bd.zeros((self.Nx * self.Ny * self.Nz, 3, 3), dtype = bd.complex)
         eye[:, range(3), range(3)] = 1.0
         self.inverse_permittivity = bd.reshape(
             bd.reshape(self.inverse_permittivity, (-1, 1, 3)) * eye,

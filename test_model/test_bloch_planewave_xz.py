@@ -1,0 +1,129 @@
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+from IPython.display import clear_output
+import fdtd
+from fdtd.fdtd_helper import um, nm, to_grid
+
+# === 模擬參數 ===
+fdtd.set_backend("numpy")
+wavelength = nm(850)
+grid_spacing = nm(20)
+x_span, z_span = um(5), um(6)
+Nx = to_grid(x_span, grid_spacing)
+Nz = to_grid(z_span, grid_spacing)
+
+# === Bloch 入射角設定（沿 x 入射無用，可保留結構）===
+theta_deg = 0
+theta = np.deg2rad(theta_deg)
+k0 = 2 * np.pi / wavelength
+kx = k0 * np.sin(theta)
+Lx = Nx * grid_spacing
+
+# === 建立 Grid (XZ 模擬) ===
+grid = fdtd.Grid(
+    grid_spacing=grid_spacing,
+    shape=(Nx, 1, Nz),  # y=1 slice，模擬 x-z 平面
+    permittivity=1
+)
+
+# === 邊界條件 ===
+grid[0, :, :] = fdtd.BlochBoundary(k_component=kx, length=Lx, name="bloch")
+# grid[-1, 0, :] = fdtd.BlochBoundary(k_component=-kx, length=Lx, name="bloch_right")
+grid[:, :, :10] = fdtd.PML(name="pml_front")
+grid[:, :, -10:] = fdtd.PML(name="pml_back")
+grid.promote_dtypes_to_complex()
+
+# === 儲存資料夾 ===
+simfolder = grid.save_simulation("test_bloch_xz")
+
+# === 材料層：z = 2–3 µm，n = 1.5 ===
+start_z = to_grid(um(2), grid_spacing)
+end_z = to_grid(um(3), grid_spacing)
+grid[:, 0, start_z:end_z] = fdtd.Object(n=1.5, k=0, name="n=1.5")
+
+# === 光源：z = 1 µm，橫跨 x ===
+source_z = to_grid(um(1), grid_spacing)
+# grid[:, 0, source_z:source_z+1] = fdtd.ComplexPlaneWave2D(
+#     wavelength=wavelength,
+#     period=wavelength / 3e8,
+#     amplitude=1.0 + 0j,
+#     pulse=False,
+#     cycle=1,
+#     name="plane_source"
+# )
+
+grid[:, 0, source_z:source_z+1] = fdtd.DirectionalComplexPlaneWave2D(
+    wavelength=wavelength,
+    period=wavelength / 3e8,
+    amplitude=1.0 + 0j,
+    pulse=False,
+    cycle=1,
+    name="plane_source",
+    # direction="z+"
+)
+
+# === 偵測器：穿透 z = 5 µm，反射 z = 0.5 µm（可選）===
+det_z_T = to_grid(um(5), grid_spacing)
+det_z_R = to_grid(um(0.5), grid_spacing)
+field_x1 = to_grid(um(1), grid_spacing)
+field_x2 = to_grid(um(4), grid_spacing)
+field_z1 = to_grid(um(1.5), grid_spacing)
+field_z2 = to_grid(um(3.5), grid_spacing)
+grid[:, 0, det_z_T:det_z_T+1] = fdtd.LineDetector(name="detector_transmit")
+grid[:, 0, det_z_R:det_z_R+1] = fdtd.LineDetector(name="detector_reflect")
+# grid[field_x1:field_x2, 0, field_z1:field_z2] = fdtd.BlockDetector(name="detector_field")
+
+# === 執行模擬 ===
+for t in range(1000):
+    grid.step()
+    if t % 20 == 0:
+        fig = grid.visualize(y=0, animate=True, index=t, save=True, folder=simfolder)
+        plt.title(f"t = {t}")
+        ax = plt.gca()
+        ax.set_xticklabels([f"{x * grid_spacing * 1e6:.1f}" for x in ax.get_xticks()])
+        ax.set_yticklabels([f"{z * grid_spacing * 1e6:.1f}" for z in ax.get_yticks()])
+        ax.set_xlabel("x (µm)")
+        ax.set_ylabel("z (µm)")
+        plt.tight_layout()
+        clear_output(wait=True)
+
+# === 儲存模擬資料 ===
+grid.save_data()
+
+# === 後處理分析 ===
+Ex_T = np.array(grid.detector_transmit.detector_values()["Ex"])
+Ex_R = np.array(grid.detector_reflect.detector_values()["Ex"])
+intensity_T = np.sum(np.abs(Ex_T)**2, axis=1)
+intensity_R = np.sum(np.abs(Ex_R)**2, axis=1)
+
+# === 時間軸 ===
+time_array = np.arange(len(intensity_T)) * grid.time_step * 1e15
+
+# === 繪圖：穿透與反射 ===
+plt.figure()
+plt.plot(time_array, intensity_T, label="Transmitted Intensity (z=5 µm)")
+plt.plot(time_array, intensity_R, label="Reflected Intensity (z=0.5 µm)")
+plt.title("Intensity vs Time step")
+plt.xlabel("Time (fs)")
+plt.ylabel("Intensity (|Ez|^2 summed)")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+# === 穩態功率比 ===
+steady_start = -100
+avg_T = np.mean(intensity_T[steady_start:])
+avg_R = np.mean(intensity_R[steady_start:])
+total = avg_T + avg_R
+print(f"Average Transmitted Power: {avg_T:.4e}")
+print(f"Average Reflected Power  : {avg_R:.4e}")
+print(f"Transmission Ratio       : {avg_T / total:.2%}")
+print(f"Reflection Ratio         : {avg_R / total:.2%}")
+
+# === 繪製 BlockDetector 圖 ===
+df = np.load(os.path.join(simfolder, "detector_readings.npz"))
+# Ez = df["detector_field (E)"]
+# intensity = np.abs(Ez)**2
+# fdtd.dB_map_2D(intensity)

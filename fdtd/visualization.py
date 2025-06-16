@@ -312,7 +312,6 @@ def visualize(
                     _x = [-0.5, Nx - 0.5, float("nan"), -0.5, Nx - 0.5]
                     _y = [-0.5, -0.5, float("nan"), Ny - 0.5, Ny - 0.5]
                     plt.plot(_y, _x, color=blochcolor, linewidth=3)
-            # 如果你之後改用 x/y 平面也可以在此加 elif x is not None 或 y is not None 的畫法
 
 
     for obj in grid.objects:
@@ -410,7 +409,7 @@ def dB_map_2D(
     a = 10 * log10([[y / minVal for y in x] for x in a])
 
     plt.title("dB map of Electrical waves in detector region")
-    plt.imshow(a, cmap="inferno", interpolation=interpolation)
+    plt.imshow(a, cmap="jet", interpolation=interpolation)
     cbar = plt.colorbar()
     cbar.ax.set_ylabel("dB scale", rotation=270)
 

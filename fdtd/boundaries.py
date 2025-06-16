@@ -468,14 +468,14 @@ class PML(Boundary):
 
         # set the other parameters
         Nx, Ny, Nz = self.shape  # is defined by _set_shape()
-        self.phi_E = bd.zeros((Nx, Ny, Nz, 3))
-        self.phi_H = bd.zeros((Nx, Ny, Nz, 3))
-        self.psi_Ex = bd.zeros((Nx, Ny, Nz, 3))
-        self.psi_Ey = bd.zeros((Nx, Ny, Nz, 3))
-        self.psi_Ez = bd.zeros((Nx, Ny, Nz, 3))
-        self.psi_Hx = bd.zeros((Nx, Ny, Nz, 3))
-        self.psi_Hy = bd.zeros((Nx, Ny, Nz, 3))
-        self.psi_Hz = bd.zeros((Nx, Ny, Nz, 3))
+        self.phi_E = bd.zeros((Nx, Ny, Nz, 3), dtype=bd.complex)
+        self.phi_H = bd.zeros((Nx, Ny, Nz, 3), dtype=bd.complex)
+        self.psi_Ex = bd.zeros((Nx, Ny, Nz, 3), dtype=bd.complex)
+        self.psi_Ey = bd.zeros((Nx, Ny, Nz, 3), dtype=bd.complex)
+        self.psi_Ez = bd.zeros((Nx, Ny, Nz, 3), dtype=bd.complex)
+        self.psi_Hx = bd.zeros((Nx, Ny, Nz, 3), dtype=bd.complex)
+        self.psi_Hy = bd.zeros((Nx, Ny, Nz, 3), dtype=bd.complex)
+        self.psi_Hz = bd.zeros((Nx, Ny, Nz, 3), dtype=bd.complex)
 
         self.bE = bd.exp(-(self.sigmaE / self.k + self.a) * self.grid.courant_number)
         self.cE = (
@@ -586,12 +586,12 @@ class _PMLXlow(PML):
 
     def _set_sigmaE(self):
         sigma = self._sigma(bd.arange(self.thickness - 0.5, -0.5, -1.0))
-        self.sigmaE = bd.zeros((self.thickness, self.grid.Ny, self.grid.Nz, 3))
+        self.sigmaE = bd.zeros((self.thickness, self.grid.Ny, self.grid.Nz, 3), dtype = bd.complex)
         self.sigmaE[:, :, :, 0] = sigma[:, None, None]
 
     def _set_sigmaH(self):
         sigma = self._sigma(bd.arange(self.thickness - 1.0, 0, -1.0))
-        self.sigmaH = bd.zeros((self.thickness, self.grid.Ny, self.grid.Nz, 3))
+        self.sigmaH = bd.zeros((self.thickness, self.grid.Ny, self.grid.Nz, 3), dtype = bd.complex)
         self.sigmaH[:-1, :, :, 0] = sigma[:, None, None]
 
 
@@ -609,12 +609,12 @@ class _PMLXhigh(PML):
 
     def _set_sigmaE(self):
         sigma = self._sigma(bd.arange(0.5, self.thickness + 0.5, 1.0))
-        self.sigmaE = bd.zeros((self.thickness, self.grid.Ny, self.grid.Nz, 3))
+        self.sigmaE = bd.zeros((self.thickness, self.grid.Ny, self.grid.Nz, 3), dtype = bd.complex)
         self.sigmaE[:, :, :, 0] = sigma[:, None, None]
 
     def _set_sigmaH(self):
         sigma = self._sigma(bd.arange(1.0, self.thickness, 1.0))
-        self.sigmaH = bd.zeros((self.thickness, self.grid.Ny, self.grid.Nz, 3))
+        self.sigmaH = bd.zeros((self.thickness, self.grid.Ny, self.grid.Nz, 3), dtype = bd.complex)
         self.sigmaH[:-1, :, :, 0] = sigma[:, None, None]
 
 
@@ -632,12 +632,12 @@ class _PMLYlow(PML):
 
     def _set_sigmaE(self):
         sigma = self._sigma(bd.arange(self.thickness - 0.5, -0.5, -1.0))
-        self.sigmaE = bd.zeros((self.grid.Nx, self.thickness, self.grid.Nz, 3))
+        self.sigmaE = bd.zeros((self.grid.Nx, self.thickness, self.grid.Nz, 3), dtype = bd.complex)
         self.sigmaE[:, :, :, 1] = sigma[None, :, None]
 
     def _set_sigmaH(self):
         sigma = self._sigma(bd.arange(self.thickness - 1.0, 0, -1.0))
-        self.sigmaH = bd.zeros((self.grid.Nx, self.thickness, self.grid.Nz, 3))
+        self.sigmaH = bd.zeros((self.grid.Nx, self.thickness, self.grid.Nz, 3), dtype = bd.complex)
         self.sigmaH[:, :-1, :, 1] = sigma[None, :, None]
 
 
@@ -655,12 +655,12 @@ class _PMLYhigh(PML):
 
     def _set_sigmaE(self):
         sigma = self._sigma(bd.arange(0.5, self.thickness + 0.5, 1.0))
-        self.sigmaE = bd.zeros((self.grid.Nx, self.thickness, self.grid.Nz, 3))
+        self.sigmaE = bd.zeros((self.grid.Nx, self.thickness, self.grid.Nz, 3), dtype = bd.complex)
         self.sigmaE[:, :, :, 1] = sigma[None, :, None]
 
     def _set_sigmaH(self):
         sigma = self._sigma(bd.arange(1.0, self.thickness, 1.0))
-        self.sigmaH = bd.zeros((self.grid.Nx, self.thickness, self.grid.Nz, 3))
+        self.sigmaH = bd.zeros((self.grid.Nx, self.thickness, self.grid.Nz, 3), dtype = bd.complex)
         self.sigmaH[:, :-1, :, 1] = sigma[None, :, None]
 
 
@@ -678,12 +678,12 @@ class _PMLZlow(PML):
 
     def _set_sigmaE(self):
         sigma = self._sigma(bd.arange(self.thickness - 0.5, -0.5, -1.0))
-        self.sigmaE = bd.zeros((self.grid.Nx, self.grid.Ny, self.thickness, 3))
+        self.sigmaE = bd.zeros((self.grid.Nx, self.grid.Ny, self.thickness, 3), dtype = bd.complex)
         self.sigmaE[:, :, :, 2] = sigma[None, None, :]
 
     def _set_sigmaH(self):
         sigma = self._sigma(bd.arange(self.thickness - 1.0, 0, -1.0))
-        self.sigmaH = bd.zeros((self.grid.Nx, self.grid.Ny, self.thickness, 3))
+        self.sigmaH = bd.zeros((self.grid.Nx, self.grid.Ny, self.thickness, 3), dtype = bd.complex)
         self.sigmaH[:, :, :-1, 2] = sigma[None, None, :]
 
 
@@ -701,12 +701,12 @@ class _PMLZhigh(PML):
 
     def _set_sigmaE(self):
         sigma = self._sigma(bd.arange(0.5, self.thickness + 0.5, 1.0))
-        self.sigmaE = bd.zeros((self.grid.Nx, self.grid.Ny, self.thickness, 3))
+        self.sigmaE = bd.zeros((self.grid.Nx, self.grid.Ny, self.thickness, 3), dtype = bd.complex)
         self.sigmaE[:, :, :, 2] = sigma[None, None, :]
 
     def _set_sigmaH(self):
         sigma = self._sigma(bd.arange(1.0, self.thickness, 1.0))
-        self.sigmaH = bd.zeros((self.grid.Nx, self.grid.Ny, self.thickness, 3))
+        self.sigmaH = bd.zeros((self.grid.Nx, self.grid.Ny, self.thickness, 3), dtype = bd.complex)
         self.sigmaH[:, :, :-1, 2] = sigma[None, None, :]
 
 

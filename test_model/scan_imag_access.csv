@@ -1,0 +1,2 @@
+File,Line,Code
+C:\Pierre\Coding\Python\fdtd\fdtd\fourier.py,300,"# plt.plot(spectrum_freqs[begin_freq:end_freq],(voltage_spectrum[begin_freq:end_freq]/current_spectrum[begin_freq:end_freq]).imag)"

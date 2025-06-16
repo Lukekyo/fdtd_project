@@ -4,7 +4,7 @@ __author__ = "Floris laporte"
 __version__ = "0.3.6"
 
 from .grid import Grid
-from .sources import PointSource, LineSource, ComplexLineSource, PlaneSource, ComplexPlaneWave2D, ComplexPlaneSource
+from .sources import PointSource, LineSource, ComplexLineSource, PlaneSource, ComplexPlaneWave2D, DirectionalComplexPlaneWave2D
 from .detectors import LineDetector, BlockDetector, CurrentDetector
 from .objects import Object, AbsorbingObject, AnisotropicObject
 from .boundaries import PeriodicBoundary, BlochBoundary, PML

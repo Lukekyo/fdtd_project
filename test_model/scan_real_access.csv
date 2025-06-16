@@ -1,0 +1,5 @@
+File,Line,Code
+C:\Pierre\Coding\Python\fdtd\fdtd\backend.py,178,real = _replace_float(numpy.real)
+C:\Pierre\Coding\Python\fdtd\fdtd\fourier.py,299,"# plt.plot(spectrum_freqs[begin_freq:end_freq],(voltage_spectrum[begin_freq:end_freq]/current_spectrum[begin_freq:end_freq]).real)"
+C:\Pierre\Coding\Python\fdtd\fdtd\fourier.py,303,# power_spectrum = -1.0*((voltage_spectrum[begin_freq:end_freq]*np.conj(current_spectrum[begin_freq:end_freq])).real)
+C:\Pierre\Coding\Python\fdtd\fdtd\sources.py,653,# vect = bd.real(self.profile * bd.exp(1j * (self.omega * q + self.phase_shift)))

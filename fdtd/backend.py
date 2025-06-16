@@ -178,6 +178,9 @@ class NumpyBackend(Backend):
     real = _replace_float(numpy.real)
     """ create a range of values """
 
+    where = _replace_float(numpy.where)
+    """ create a range of values """
+
     pad = staticmethod(numpy.pad)
 
     fftfreq = staticmethod(numpy.fft.fftfreq)
@@ -308,6 +311,12 @@ if TORCH_AVAILABLE:
             return torch.arange(start, stop + 0.5 * float(endpoint) * delta, delta)
 
         arange = staticmethod(torch.arange)
+        """ create a range of values """
+        
+        real = staticmethod(torch.real)
+        """ create a range of values """
+        
+        where = staticmethod(torch.where)
         """ create a range of values """
 
         pad = staticmethod(torch.nn.functional.pad)  # type: ignore

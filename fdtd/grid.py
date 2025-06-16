@@ -136,8 +136,8 @@ class Grid:
         self.time_step = self.courant_number * self.grid_spacing / const.c
 
         # save electric and magnetic field
-        self.E = bd.zeros((self.Nx, self.Ny, self.Nz, 3))
-        self.H = bd.zeros((self.Nx, self.Ny, self.Nz, 3))
+        self.E = bd.zeros((self.Nx, self.Ny, self.Nz, 3), dtype=bd.complex)
+        self.H = bd.zeros((self.Nx, self.Ny, self.Nz, 3), dtype=bd.complex)
 
         # save the inverse of the relative permittiviy and the relative permeability
         # these tensors can be anisotropic!
