@@ -9,7 +9,7 @@ from fdtd.fdtd_helper import um, nm, to_grid
 fdtd.set_backend("numpy")
 wavelength = nm(850)
 grid_spacing = nm(20)
-x_span, z_span = um(5), um(6)
+x_span, z_span = um(2), um(6)
 Nx = to_grid(x_span, grid_spacing)
 Nz = to_grid(z_span, grid_spacing)
 
@@ -40,7 +40,7 @@ simfolder = grid.save_simulation("test_bloch_xz")
 # === 材料層：z = 2–3 µm，n = 1.5 ===
 start_z = to_grid(um(2), grid_spacing)
 end_z = to_grid(um(3), grid_spacing)
-grid[:, 0, start_z:end_z] = fdtd.Object(n=1.5, k=0, name="n=1.5")
+grid[:, 0, start_z:end_z] = fdtd.Object(n=1.0, k=0, name="n=1.5")
 
 # === 光源：z = 1 µm，橫跨 x ===
 source_z = to_grid(um(1), grid_spacing)
@@ -96,14 +96,23 @@ Ex_T = np.array(grid.detector_transmit.detector_values()["Ex"])
 Ex_R = np.array(grid.detector_reflect.detector_values()["Ex"])
 intensity_T = np.sum(np.abs(Ex_T)**2, axis=1)
 intensity_R = np.sum(np.abs(Ex_R)**2, axis=1)
+# === 穩態功率比 ===
+steady_start = -100  # 使用最後 100 個時間步長的數據計算平均值
+avg_T = np.mean(intensity_T[steady_start:])
+avg_R = np.mean(intensity_R[steady_start:])
+total_power = avg_T + avg_R  # 穩態的總功率
+# === 計算相對強度 ===
+relative_intensity_T = intensity_T / total_power  # 穿透相對強度
+relative_intensity_R = intensity_R / total_power  # 反射相對強度
+
 
 # === 時間軸 ===
 time_array = np.arange(len(intensity_T)) * grid.time_step * 1e15
 
 # === 繪圖：穿透與反射 ===
 plt.figure()
-plt.plot(time_array, intensity_T, label="Transmitted Intensity (z=5 µm)")
-plt.plot(time_array, intensity_R, label="Reflected Intensity (z=0.5 µm)")
+plt.plot(time_array, relative_intensity_T, label="Transmitted Intensity (z=5 µm)")
+plt.plot(time_array, relative_intensity_R, label="Reflected Intensity (z=0.5 µm)")
 plt.title("Intensity vs Time step")
 plt.xlabel("Time (fs)")
 plt.ylabel("Intensity (|Ez|^2 summed)")
@@ -113,14 +122,10 @@ plt.tight_layout()
 plt.show()
 
 # === 穩態功率比 ===
-steady_start = -100
-avg_T = np.mean(intensity_T[steady_start:])
-avg_R = np.mean(intensity_R[steady_start:])
-total = avg_T + avg_R
 print(f"Average Transmitted Power: {avg_T:.4e}")
 print(f"Average Reflected Power  : {avg_R:.4e}")
-print(f"Transmission Ratio       : {avg_T / total:.2%}")
-print(f"Reflection Ratio         : {avg_R / total:.2%}")
+print(f"Transmission Ratio       : {avg_T / total_power:.2%}")
+print(f"Reflection Ratio         : {avg_R / total_power:.2%}")
 
 # === 繪製 BlockDetector 圖 ===
 df = np.load(os.path.join(simfolder, "detector_readings.npz"))

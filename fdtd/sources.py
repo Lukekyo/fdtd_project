@@ -684,6 +684,7 @@ class ComplexPlaneWave2D:
         period: float,
         amplitude: complex = 1.0 + 0.0j,
         phase_shift: float = 0.0,
+        theta_deg: float = 0.0,
         name: str = None,
         pulse: bool = False,
         cycle: int = 5,
@@ -700,6 +701,7 @@ class ComplexPlaneWave2D:
         self.pulse = pulse
         self.cycle = cycle
         self.hanning_dt = hanning_dt
+        self.theta_deg = bd.asarray([bd.float(np.deg2rad(theta_deg))])[0]
 
     def _register_grid(
         self, grid: Grid, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice
@@ -712,13 +714,18 @@ class ComplexPlaneWave2D:
 
         # 儲存 slice 區間（與 ComplexLineSource 相同）
         self.x, self.y, self.z = self._handle_slices(x, y, z)
-
-        # 平面波：profile 為常數 1
-        L = len(self.x)
-        self.profile = bd.ones(L, dtype=bd.complex) * self.amplitude
-        
         if self.hanning_dt is None:
             self.hanning_dt = self.grid.time_step # 統一時間單位
+
+        # === 空間項為補償：kx x + kz z ===
+        k0 = 2 * np.pi / self.wavelength
+        kx = k0 * bd.sin(self.theta)
+        kz = k0 * bd.cos(self.theta)
+        dx = self.grid.grid_spacing
+        dz = self.grid.grid_spacing
+
+        coords = [(dx * x, dz * z) for x, z in zip(self.x, self.z)]
+        self.profile = bd.array([self.amplitude * bd.exp(1j * (kx * x + Kz * z)) for x, z in coords])
 
     def _handle_slices(
         self, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice

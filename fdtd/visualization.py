@@ -339,6 +339,7 @@ def visualize(
     cmap_norm = None
     if norm == "log":
         cmap_norm = LogNorm(vmin=1e-4, vmax=grid_energy.max() + 1e-4)
+    
     plt.imshow(
         abs(bd.numpy(grid_energy)), cmap=cmap, interpolation="sinc", norm=cmap_norm)
 
