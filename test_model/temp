@@ -1,117 +1,108 @@
-# Visualization.py
 
 import os
-import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as ptc
 from matplotlib.colors import LogNorm
-from tqdm import tqdm
-from numpy import log10, where
-from scipy.signal import hilbert
 
 from .backend import backend as bd
 
 def visualize(
-    grid, x=None, y=None, z=None,
+    grid,
+    x=None,
+    y=None,
+    z=None,
     cmap="Blues",
-    pbcolor="C3", pmlcolor=(0,0,0,0.1),
-    objcolor=(1,0,0,0.1),
-    blochcolor=(0.6,0.4,0.9,0.8),
-    srccolor="C0", detcolor="C2",
+    pbcolor="C3",
+    pmlcolor=(0, 0, 0, 0.1),
+    objcolor=(1, 0, 0, 0.1),
+    blochcolor=(0.6, 0.4, 0.9, 0.8),
+    srccolor="C0",
+    detcolor="C2",
     norm="linear",
-    animate=False, index=None, save=False, folder=None,
-    show=False, style=None,
-    mode="energy",     # 🔹新增 mode
-    real_vmax=1.0      # 🔹Ex 實部範圍上限
+    animate=False,
+    index=None,
+    save=False,
+    folder=None,
+    show=False,
+    style=None,
+    real_field_mode=False,
+    real_component="Ex",
 ):
-    """
-    mode: 'energy' | 'real' | 'abs'
-    """
-    if style:
+    if style is not None:
         plt.style.use(style)
-    if norm not in ("linear","lin","log"):
-        raise ValueError("norm should be linear or log")
+    if norm not in ("linear", "lin", "log"):
+        raise ValueError("Color map normalization should be 'linear' or 'log'.")
+
     from .sources import PointSource, LineSource, PlaneSource, ComplexLineSource
-    from .boundaries import _PeriodicBoundaryX, _PeriodicBoundaryY, _PeriodicBoundaryZ, BlochBoundary
-    from .boundaries import (_PMLXlow,_PMLXhigh,_PMLYlow,_PMLYhigh,_PMLZlow,_PMLZhigh)
+    from .boundaries import (
+        _PeriodicBoundaryX, _PeriodicBoundaryY, _PeriodicBoundaryZ,
+        _PMLXlow, _PMLXhigh, _PMLYlow, _PMLYhigh, _PMLZlow, _PMLZhigh,
+        BlochBoundary
+    )
 
     if animate:
         plt.pause(0.02)
         plt.clf()
         plt.ion()
 
-    # 驗證輸入
-    if sum(v is not None for v in (x,y,z)) != 1:
-        raise ValueError("Choose exactly one of x,y,z")
-
-    # legend setup
-    plt.plot([], lw=7, color=objcolor, label="Objects")
-    plt.plot([], lw=7, color=pmlcolor, label="PML")
-    plt.plot([], lw=3, color=pbcolor, label="Periodic Boundaries")
-    plt.plot([], lw=3, color=srccolor, label="Sources")
-    plt.plot([], lw=3, color=detcolor, label="Detectors")
-    plt.plot([], lw=3, color=blochcolor, label="Bloch Boundaries")
-
-    # 投影位置、座標設定
     if x is not None:
-        projE = grid.E[x,:,:,:]
-        xlabel, ylabel, Nx, Ny = "y","z", grid.Ny, grid.Nz
-        energy = bd.numpy(bd.sum(grid.E**2+grid.H**2, axis=-1)[x,:,:])
+        assert grid.Ny > 1 and grid.Nz > 1
+        xlabel, ylabel = "y", "z"
+        Nx, Ny = grid.Ny, grid.Nz
+        pbx, pby = _PeriodicBoundaryY, _PeriodicBoundaryZ
+        pmlxl, pmlxh, pmlyl, pmlyh = _PMLYlow, _PMLYhigh, _PMLZlow, _PMLZhigh
     elif y is not None:
-        projE = grid.E[:,y,:,:]
-        xlabel, ylabel, Nx, Ny = "z","x", grid.Nz, grid.Nx
-        energy = bd.numpy(bd.sum(grid.E**2+grid.H**2, axis=-1)[:,y,:]).T
+        assert grid.Nx > 1 and grid.Nz > 1
+        xlabel, ylabel = "z", "x"
+        Nx, Ny = grid.Nz, grid.Nx
+        pbx, pby = _PeriodicBoundaryZ, _PeriodicBoundaryX
+        pmlxl, pmlxh, pmlyl, pmlyh = _PMLZlow, _PMLZhigh, _PMLXlow, _PMLXhigh
+    elif z is not None:
+        assert grid.Nx > 1 and grid.Ny > 1
+        xlabel, ylabel = "x", "y"
+        Nx, Ny = grid.Nx, grid.Ny
+        pbx, pby = _PeriodicBoundaryX, _PeriodicBoundaryY
+        pmlxl, pmlxh, pmlyl, pmlyh = _PMLXlow, _PMLXhigh, _PMLYlow, _PMLYhigh
     else:
-        projE = grid.E[:,:,z,:]
-        xlabel, ylabel, Nx, Ny = "x","y", grid.Nx, grid.Ny
-        energy = bd.numpy(bd.sum(grid.E**2+grid.H**2, axis=-1)[:,:,z])
+        raise ValueError("Visualization only works for 2D grids")
 
-    # draw sources/detectors/boundaries/objects ...
-    # （略—與原 code 相同）
-
-    # === 根據 mode 決定顯示內容 ===
-    if mode == "energy":
-        image = energy
-        cmap_used = cmap
-        norm_used = LogNorm(vmin=1e-4, vmax=image.max()+1e-4) if norm in ("log","lin","linear") else None
+    if real_field_mode:
+        comp_idx = {"Ex": 0, "Ey": 1, "Ez": 2}[real_component]
+        if x is not None:
+            data = bd.numpy(grid.E[x, :, :, comp_idx].real)
+        elif y is not None:
+            data = bd.numpy(grid.E[:, y, :, comp_idx].real).T
+        elif z is not None:
+            data = bd.numpy(grid.E[:, :, z, comp_idx].real)
+        grid_energy = data
     else:
-        # 取 Ex 分量
-        Ex = bd.numpy(projE[...,0])
-        if mode == "real":
-            image = Ex.real
-            cmap_used = "RdBu"
-        elif mode == "abs":
-            image = np.abs(Ex)
-            cmap_used = cmap
-        else:
-            raise ValueError("mode must be 'energy','real' or 'abs'")
-        norm_used = None
+        grid_energy = bd.sum(grid.E**2 + grid.H**2, -1)
+        if x is not None:
+            grid_energy = grid_energy[x, :, :]
+        elif y is not None:
+            grid_energy = grid_energy[:, y, :].T
+        elif z is not None:
+            grid_energy = grid_energy[:, :, z]
 
-    # 畫圖
+    cmap_norm = None
+    if norm == "log":
+        cmap_norm = LogNorm(vmin=1e-4, vmax=grid_energy.max() + 1e-4)
+
     plt.imshow(
-        image.T,
-        cmap=cmap_used,
-        norm=norm_used,
-        origin="lower",
-        vmin=-real_vmax if mode=="real" else None,
-        vmax= real_vmax if mode=="real" else None
+        abs(grid_energy),
+        cmap=cmap,
+        interpolation="sinc",
+        norm=cmap_norm
     )
-    plt.colorbar()
-    plt.xlabel(xlabel); plt.ylabel(ylabel)
-    plt.ylim(Nx,-1); plt.xlim(-1,Ny)
-    plt.figlegend(); plt.tight_layout()
+    plt.ylabel(xlabel)
+    plt.xlabel(ylabel)
+    plt.ylim(Nx, -1)
+    plt.xlim(-1, Ny)
+    plt.tight_layout()
 
-    if save and folder and index is not None:
-        plt.savefig(os.path.join(folder, f"{mode}_{index:04d}.png"))
+    if save:
+        plt.savefig(os.path.join(folder, f"file{str(index).zfill(4)}.png"))
     if show:
         plt.show()
+
     return plt.gcf()
-
-
-def dB_map_2D( ... ):
-    # 原本 code 無修改
-    ...
-
-def plot_detection( ... ):
-    # 原本 code 無修改
-    ...
