@@ -46,22 +46,22 @@ grid[:, start_y:end_y, 0] = fdtd.Object(n=1,k=0, name="n=1.5")
 # === 光源：y = 4 µm，連續波 ===
 source_y = to_grid(um(4), grid_spacing)
 
-# grid[:, source_y:source_y+1, 0] = fdtd.LineSource(
-#     period=wavelength / 3e8,
-#     name="source",
-#     pulse=False,
-#     cycle=5,
-#     hanning_dt=None
-# )
-
-grid[:, source_y:source_y+1, 0] = fdtd.ComplexLineSource(
-    wavelength=wavelength,
-    period = wavelength / 3e8,
-    amplitude=1.0 + 0j,
+grid[:, source_y:source_y+1, 0] = fdtd.LineSource(
+    period=wavelength / 3e8,
+    name="source",
     pulse=False,
     cycle=5,
-    name='cw_source'
+    hanning_dt=None
 )
+
+# grid[:, source_y:source_y+1, 0] = fdtd.ComplexLineSource(
+#     wavelength=wavelength,
+#     period = wavelength / 3e8,
+#     amplitude=1.0 + 0j,
+#     pulse=False,
+#     cycle=5,
+#     name='cw_source'
+# )
 
 
 # === 監視器：反射 y = 1 µm，穿透 y = 5 µm ===

@@ -2,6 +2,8 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from IPython.display import clear_output
+from scipy.ndimage import gaussian_filter1d
+from scipy.signal import hilbert
 import fdtd
 from fdtd.fdtd_helper import um, nm, to_grid
 
@@ -40,18 +42,10 @@ simfolder = grid.save_simulation("test_bloch_xz")
 # === 材料層：z = 2–3 µm，n = 1.5 ===
 start_z = to_grid(um(2), grid_spacing)
 end_z = to_grid(um(3), grid_spacing)
-grid[:, 0, start_z:end_z] = fdtd.Object(n=1.0, k=0, name="n=1.5")
+grid[:, 0, start_z:end_z] = fdtd.Object(n=1.5, k=0, name="n=1.5")
 
 # === 光源：z = 1 µm，橫跨 x ===
 source_z = to_grid(um(1), grid_spacing)
-# grid[:, 0, source_z:source_z+1] = fdtd.ComplexPlaneWave2D(
-#     wavelength=wavelength,
-#     period=wavelength / 3e8,
-#     amplitude=1.0 + 0j,
-#     pulse=False,
-#     cycle=1,
-#     name="plane_source"
-# )
 
 grid[:, 0, source_z:source_z+1] = fdtd.DirectionalComplexPlaneWave2D(
     wavelength=wavelength,
@@ -75,10 +69,17 @@ grid[:, 0, det_z_R:det_z_R+1] = fdtd.LineDetector(name="detector_reflect")
 # grid[field_x1:field_x2, 0, field_z1:field_z2] = fdtd.BlockDetector(name="detector_field")
 
 # === 執行模擬 ===
-for t in range(1000):
+for t in range(500):
     grid.step()
-    if t % 20 == 0:
-        fig = grid.visualize(y=0, animate=True, index=t, save=True, folder=simfolder)
+    if t % 10 == 0:
+        # fig = grid.visualize(y=0, animate=True, index=t, save=True, folder=simfolder)
+        fig = grid.visualize(y=0, 
+                             animate=True, 
+                             index=t, save=True, 
+                             folder=simfolder, 
+                             real_field_mode=True, 
+                             real_component="Ex"
+                             )
         plt.title(f"t = {t}")
         ax = plt.gca()
         ax.set_xticklabels([f"{x * grid_spacing * 1e6:.1f}" for x in ax.get_xticks()])
@@ -105,18 +106,24 @@ total_power = avg_T + avg_R  # 穩態的總功率
 relative_intensity_T = intensity_T / total_power  # 穿透相對強度
 relative_intensity_R = intensity_R / total_power  # 反射相對強度
 
+# === 切片位置 ===
+center_idx = Ex_T.shape[1] // 2  # 取中間的切片
+Ex_center_real = Ex_T[:, center_idx].real  # 取 Ex_T 在中心位置的實部
+smoothed = gaussian_filter1d(Ex_center_real, sigma=5)  # 平滑處理
 
 # === 時間軸 ===
 time_array = np.arange(len(intensity_T)) * grid.time_step * 1e15
 
 # === 繪圖：穿透與反射 ===
 plt.figure()
-plt.plot(time_array, relative_intensity_T, label="Transmitted Intensity (z=5 µm)")
-plt.plot(time_array, relative_intensity_R, label="Reflected Intensity (z=0.5 µm)")
+plt.plot(time_array, Ex_center_real, label="Real(Ex) (z=5 µm)")
+plt.plot(time_array, smoothed, label="smoothed (z=5 µm)")
+# plt.plot(time_array, relative_intensity_T, label="Transmitted Intensity (z=5 µm)")
+# plt.plot(time_array, relative_intensity_R, label="Reflected Intensity (z=0.5 µm)")
 plt.title("Intensity vs Time step")
 plt.xlabel("Time (fs)")
 plt.ylabel("Intensity (|Ez|^2 summed)")
-plt.legend()
+plt.legend(loc="upper right")
 plt.grid(True)
 plt.tight_layout()
 plt.show()

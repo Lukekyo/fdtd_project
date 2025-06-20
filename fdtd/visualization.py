@@ -24,27 +24,31 @@ from .backend import backend as bd
 
 # 2D visualization function
 
-
 def visualize(
     grid,
     x=None,
     y=None,
     z=None,
-    cmap="Blues",
+    cmap="bwr",
     pbcolor="C3",
     pmlcolor=(0, 0, 0, 0.1),
     objcolor=(1, 0, 0, 0.1),
-    blochcolor = (0.6, 0.4, 0.9, 0.8),  # 紫色 + 透明度
+    blochcolor=(0.6, 0.4, 0.9, 0.8),
     srccolor="C0",
     detcolor="C2",
     norm="linear",
-    animate=False,  # True to see frame by frame states of grid while running simulation
-    index=None,  # index for each frame of animation (visualize fn runs in a loop, loop variable is passed as index)
-    save=False,  # True to save frames (requires parameters index, folder)
-    folder=None,  # folder path to save frames
-    show=False,  # default False to allow animate to be true
+    animate=False,
+    index=None,
+    save=False,
+    folder=None,
+    show=False,
     style=None,
+    real_field_mode=False,
+    real_component="Ex",
 ):
+    """
+    mode: 'energy' | 'real' | 'abs'
+    """
     """visualize a projection of the grid and the optical energy inside the grid
 
     Args:
@@ -69,17 +73,12 @@ def visualize(
         plt.style.use(style)
     if norm not in ("linear", "lin", "log"):
         raise ValueError("Color map normalization should be 'linear' or 'log'.")
-    # imports (placed here to circumvent circular imports)
+
     from .sources import PointSource, LineSource, PlaneSource, ComplexLineSource
-    from .boundaries import _PeriodicBoundaryX, _PeriodicBoundaryY, _PeriodicBoundaryZ
-    from .boundaries import BlochBoundary
     from .boundaries import (
-        _PMLXlow,
-        _PMLXhigh,
-        _PMLYlow,
-        _PMLYhigh,
-        _PMLZlow,
-        _PMLZhigh,
+        _PeriodicBoundaryX, _PeriodicBoundaryY, _PeriodicBoundaryZ,
+        _PMLXlow, _PMLXhigh, _PMLYlow, _PMLYhigh, _PMLZlow, _PMLZhigh,
+        BlochBoundary
     )
 
     if animate:  # pause for 0.1s, clear plot
@@ -147,6 +146,24 @@ def visualize(
         grid_energy = grid_energy[:, :, z]
     else:
         raise ValueError("Visualization only works for 2D grids")
+
+    if real_field_mode:
+        comp_idx = {"Ex": 0, "Ey": 1, "Ez": 2}[real_component]
+        if x is not None:
+            data = bd.numpy(grid.E[x, :, :, comp_idx].real)
+        elif y is not None:
+            data = bd.numpy(grid.E[:, y, :, comp_idx].real).T
+        elif z is not None:
+            data = bd.numpy(grid.E[:, :, z, comp_idx].real)
+        grid_energy = data
+    else:
+        grid_energy = bd.sum(grid.E**2 + grid.H**2, -1)
+        if x is not None:
+            grid_energy = grid_energy[x, :, :]
+        elif y is not None:
+            grid_energy = grid_energy[:, y, :].T
+        elif z is not None:
+            grid_energy = grid_energy[:, :, z]
 
     for source in grid.sources:
         if isinstance(source, LineSource):
@@ -313,7 +330,6 @@ def visualize(
                     _y = [-0.5, -0.5, float("nan"), Ny - 0.5, Ny - 0.5]
                     plt.plot(_y, _x, color=blochcolor, linewidth=3)
 
-
     for obj in grid.objects:
         if x is not None:
             _x = (obj.y.start, obj.y.stop)
@@ -340,8 +356,14 @@ def visualize(
     if norm == "log":
         cmap_norm = LogNorm(vmin=1e-4, vmax=grid_energy.max() + 1e-4)
     
+    amp = bd.max(abs(grid_energy))
     plt.imshow(
-        abs(bd.numpy(grid_energy)), cmap=cmap, interpolation="sinc", norm=cmap_norm)
+        bd.numpy(grid_energy), 
+        cmap=cmap, 
+        vmin = -amp,
+        vmax = amp,
+        interpolation="sinc", 
+        norm=cmap_norm)
 
     # finalize the plot
     plt.ylabel(xlabel)
