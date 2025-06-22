@@ -21,6 +21,17 @@ from scipy.signal import hilbert  # TODO: Write hilbert function to replace usin
 # relative
 from .backend import backend as bd
 
+def get_extent(grid, plane: str):
+    dx = grid.grid_spacing  # 單位是 m
+    μm = 1e6
+    if plane == "xy":
+        return [0, grid.Nx * dx * μm, 0, grid.Ny * dx * μm]
+    elif plane == "xz":
+        return [0, grid.Nx * dx * μm, 0, grid.Nz * dx * μm]
+    elif plane == "yz":
+        return [0, grid.Ny * dx * μm, 0, grid.Nz * dx * μm]
+    else:
+        raise ValueError(f"Unsupported plane: {plane}")
 
 # 2D visualization function
 
@@ -368,7 +379,7 @@ def visualize(
             linewidth=0,
             edgecolor="none",
             facecolor=objcolor,
-            label="Objects" + obj.name if hasattr(obj, "name") else "Object"
+            label="Object: " + obj.name if hasattr(obj, "name") else "Object"
         )
         plt.gca().add_patch(patch)
 
@@ -376,7 +387,15 @@ def visualize(
     cmap_norm = None
     if norm == "log":
         cmap_norm = LogNorm(vmin=1e-4, vmax=grid_energy.max() + 1e-4)
-    
+
+    if x is not None:
+        plane = "yz"
+    elif y is not None:
+        plane = "xz"
+    elif z is not None:
+        plane = "xy"    
+    extent = get_extent(grid, plane)
+
     amp = bd.max(abs(grid_energy))
     plt.imshow(
         bd.numpy(grid_energy), 
@@ -384,13 +403,14 @@ def visualize(
         vmin = -amp,
         vmax = amp,
         interpolation="sinc", 
+        extent=extent,
         norm=cmap_norm)
 
     # finalize the plot
     plt.ylabel(xlabel)
     plt.xlabel(ylabel)
-    plt.ylim(Nx, -1)
-    plt.xlim(-1, Ny)
+    # plt.ylim(Nx, -1)
+    # plt.xlim(-1, Ny)
     plt.figlegend()
     plt.tight_layout()
 

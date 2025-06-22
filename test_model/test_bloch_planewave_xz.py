@@ -1,8 +1,7 @@
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-import os
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 from IPython.display import clear_output
@@ -18,7 +17,7 @@ Nx = fdtd.to_grid(x_span, grid_spacing)
 Nz = fdtd.to_grid(z_span, grid_spacing)
 
 # === Bloch 入射角設定（沿 x 入射無用，可保留結構）===
-theta_deg = 20
+theta_deg = 00
 theta = np.deg2rad(theta_deg)
 k0 = 2 * np.pi / wavelength
 kx = k0 * np.sin(theta)
@@ -75,24 +74,36 @@ grid[:, 0, det_z_T:det_z_T+1] = fdtd.LineDetector(name="detector_transmit")
 grid[:, 0, det_z_R:det_z_R+1] = fdtd.LineDetector(name="detector_reflect")
 # grid[field_x1:field_x2, 0, field_z1:field_z2] = fdtd.BlockDetector(name="detector_field")
 
-fdtd.plot_simulation_domain(grid, plane='xz', mode='n')
+# === 可視化模擬域 ===
+fdtd.plot_simulation_domain(grid, 
+                            plane='xz', 
+                            mode='n', 
+                            vmin=1.0, 
+                            vmax=2.0, 
+                            x_range=(1, 1.25), 
+                            z_range=(2, 3.2)
+                            )
+
+print("等待 2 秒自動繼續模擬...")
+time.sleep(2)
 
 # === 執行模擬 ===
-for t in range(0):
+for t in range(500):
     grid.step()
     if t % 10 == 0:
         # fig = grid.visualize(y=0, animate=True, index=t, save=True, folder=simfolder)
         fig = grid.visualize(y=0, 
                              animate=True, 
-                             index=t, save=True, 
+                             index=t, 
+                             save=True, 
                              folder=simfolder, 
                              real_field_mode=True, 
                              real_component="Ex"
                              )
         plt.title(f"t = {t}")
         ax = plt.gca()
-        ax.set_xticklabels([f"{x * grid_spacing * 1e6:.1f}" for x in ax.get_xticks()])
-        ax.set_yticklabels([f"{z * grid_spacing * 1e6:.1f}" for z in ax.get_yticks()])
+        # ax.set_xticklabels([f"{x * grid_spacing * 1e6:.1f}" for x in ax.get_xticks()])
+        # ax.set_yticklabels([f"{z * grid_spacing * 1e6:.1f}" for z in ax.get_yticks()])
         ax.set_xlabel("x (µm)")
         ax.set_ylabel("z (µm)")
         plt.tight_layout()
