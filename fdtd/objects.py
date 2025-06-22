@@ -296,3 +296,33 @@ class AnisotropicObject(Object):
             curl_E: the curl of electric field in the grid.
 
         """
+
+## Utility functions to extract material property maps from the grid
+
+def get_eps_map(grid):
+    """建立整個區域的相對介電常數分布 (ε = (n + ik)^2)"""
+    eps_map = bd.ones(grid.shape, dtype=bd.complex)
+    for obj in grid.objects:
+        n = getattr(obj, 'n', 1.0)
+        k = getattr(obj, 'k', 0.0)
+        eps = (n + 1j * k) ** 2
+        eps_map[obj.x, obj.y, obj.z] = eps
+    return eps_map
+
+
+def get_n_map(grid):
+    """建立折射率分布圖 (n)"""
+    n_map = bd.ones(grid.shape)
+    for obj in grid.objects:
+        n = getattr(obj, 'n', 1.0)
+        n_map[obj.x, obj.y, obj.z] = n
+    return n_map
+
+
+def get_k_map(grid):
+    """建立消光係數分布圖 (k)"""
+    k_map = bd.zeros(grid.shape)
+    for obj in grid.objects:
+        k = getattr(obj, 'k', 0.0)
+        k_map[obj.x, obj.y, obj.z] = k
+    return k_map

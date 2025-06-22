@@ -293,8 +293,6 @@ class _BlochBoundaryZ(BlochBoundary):
         self.grid.H[:, :, -1, :] = self.grid.H[:, :, 1, :] * bd.conj(self.phase)
 
 ## Perfectly Matched Layer (PML)
-
-
 class PML(Boundary):
     """ A perfectly matched layer (PML)
 

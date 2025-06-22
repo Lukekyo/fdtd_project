@@ -31,9 +31,9 @@ def visualize(
     z=None,
     cmap="bwr",
     pbcolor="C3",
+    blochcolor="C4",
     pmlcolor=(0, 0, 0, 0.1),
     objcolor=(1, 0, 0, 0.1),
-    blochcolor=(0.6, 0.4, 0.9, 0.8),
     srccolor="C0",
     detcolor="C2",
     norm="linear",
@@ -113,13 +113,32 @@ def visualize(
             "at least one projection plane (x, y or z) should be supplied to visualize the grid!"
         )
 
-    # just to create the right legend entries:
-    plt.plot([], lw=7, color=objcolor, label="Objects")
-    plt.plot([], lw=7, color=pmlcolor, label="PML")
-    plt.plot([], lw=3, color=pbcolor, label="Periodic Boundaries")
-    plt.plot([], lw=3, color=srccolor, label="Sources")
-    plt.plot([], lw=3, color=detcolor, label="Detectors")
-    plt.plot([], lw=3, color=blochcolor, label="Bloch Boundaries")
+    # 先檢查使用到了哪些元素
+    has_pml = any(isinstance(b, (_PMLXlow, _PMLXhigh, _PMLYlow, _PMLYhigh, _PMLZlow, _PMLZhigh)) for b in grid.boundaries)
+    has_pb = any(isinstance(b, (_PeriodicBoundaryX, _PeriodicBoundaryY, _PeriodicBoundaryZ)) for b in grid.boundaries)
+    has_bloch = any(isinstance(b, BlochBoundary) for b in grid.boundaries)
+    has_src = len(grid.sources) > 0
+    has_det = len(grid.detectors) > 0
+
+    # 只畫需要的 legend 條目
+    if has_pml:
+        plt.plot([], lw=7, color=pmlcolor, label="PML")
+    if has_pb:
+        plt.plot([], lw=3, color=pbcolor, label="Periodic Boundaries")
+    if has_bloch:
+        plt.plot([], lw=3, color=blochcolor, label="Bloch Boundaries")
+    if has_src:
+        plt.plot([], lw=3, color=srccolor, label="Sources")
+    if has_det:
+        plt.plot([], lw=3, color=detcolor, label="Detectors")
+
+    # # just to create the right legend entries:
+    # plt.plot([], lw=7, color=objcolor, label="Objects")
+    # plt.plot([], lw=7, color=pmlcolor, label="PML")
+    # plt.plot([], lw=3, color=pbcolor, label="Periodic Boundaries")
+    # plt.plot([], lw=3, color=srccolor, label="Sources")
+    # plt.plot([], lw=3, color=detcolor, label="Detectors")
+    # plt.plot([], lw=3, color=blochcolor, label="Bloch Boundaries")
 
     # Grid energy
     grid_energy = bd.sum(grid.E**2 + grid.H**2, -1)
@@ -341,6 +360,7 @@ def visualize(
             _x = (obj.x.start, obj.x.stop)
             _y = (obj.y.start, obj.y.stop)
 
+        # 為每個 object 分別畫 patch，並用 name 當 label
         patch = ptc.Rectangle(
             xy=(min(_y) - 0.5, min(_x) - 0.5),
             width=max(_y) - min(_y),
@@ -348,6 +368,7 @@ def visualize(
             linewidth=0,
             edgecolor="none",
             facecolor=objcolor,
+            label="Objects" + obj.name if hasattr(obj, "name") else "Object"
         )
         plt.gca().add_patch(patch)
 

@@ -674,8 +674,8 @@ class ComplexLineSource:
         s += f"        @ x={x}, y={y}, z={z}\n"
         return s
 
-# ComplexPlaneWave2D class
-class ComplexPlaneWave2D:
+# DirectionalComplexPlaneWave2D class
+class ComplexPlaneWave:
     """A 2D plane wave source (Ez polarization)"""
 
     def __init__(
@@ -685,6 +685,7 @@ class ComplexPlaneWave2D:
         amplitude: complex = 1.0 + 0.0j,
         phase_shift: float = 0.0,
         theta_deg: float = 0.0,
+        polarization_axis: str = "x",
         name: str = None,
         pulse: bool = False,
         cycle: int = 5,
@@ -694,38 +695,37 @@ class ComplexPlaneWave2D:
         self.wavelength = wavelength
         self.period = period
         self.frequency = 1.0 / period
+        self.omega = 2 * bd.pi * bd.c0 / wavelength
         self.amplitude = bd.complex(amplitude)
-        self.omega = 2 * np.pi * bd.c0 / wavelength
         self.phase_shift = phase_shift
+        self.theta = np.deg2rad(theta_deg)
         self.name = name
         self.pulse = pulse
         self.cycle = cycle
         self.hanning_dt = hanning_dt
-        self.theta_deg = bd.asarray([bd.float(np.deg2rad(theta_deg))])[0]
+        self.polarization_axis = polarization_axis.lower()
 
-    def _register_grid(
-        self, grid: Grid, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice
-    ):
+    def _register_grid(self, grid: Grid, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice):
         self.grid = grid
         self.grid.sources.append(self)
         if self.name is not None:
-            if not hasattr(grid, self.name):
-                setattr(grid, self.name, self)
+            setattr(grid, self.name, self)
 
-        # 儲存 slice 區間（與 ComplexLineSource 相同）
         self.x, self.y, self.z = self._handle_slices(x, y, z)
         if self.hanning_dt is None:
-            self.hanning_dt = self.grid.time_step # 統一時間單位
+            self.hanning_dt = grid.time_step
 
-        # === 空間項為補償：kx x + kz z ===
-        k0 = 2 * np.pi / self.wavelength
+        # === 空間相位設定 計算 kx, kz ===
+        k0 = 2*bd.pi / self.wavelength
         kx = k0 * bd.sin(self.theta)
         kz = k0 * bd.cos(self.theta)
-        dx = self.grid.grid_spacing
-        dz = self.grid.grid_spacing
+        self.spatial_phase = {
+            (xi, zi): - (kx * xi * grid.grid_spacing + kz * zi * grid.grid_spacing)
+            for xi, zi in zip(self.x, self.z)
+        }
 
-        coords = [(dx * x, dz * z) for x, z in zip(self.x, self.z)]
-        self.profile = bd.array([self.amplitude * bd.exp(1j * (kx * x + Kz * z)) for x, z in coords])
+        self.pol_index = {"x": 0, "y": 1, "z": 2}[self.polarization_axis]
+
 
     def _handle_slices(
         self, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice
@@ -797,186 +797,20 @@ class ComplexPlaneWave2D:
         return x, y, z
 
     def update_E(self):
-        # q = self.grid.time_steps_passed * self.grid.time_step  # convert to time
-        q = self.grid.time_steps_passed * self.hanning_dt 
+        # t = self.grid.time_steps_passed * self.hanning_dt
+        t = self.grid.time_steps_passed * self.grid.time_step
 
         if self.pulse:
-            t1 = int(2 * np.pi / (self.frequency * self.hanning_dt / self.cycle))
-            if q < t1:
-                env = hanning(self.frequency, q * self.hanning_dt, self.cycle)
-                vect = self.profile * bd.exp(1j * (self.omega * q + self.phase_shift)) * env
-            else:
-                vect = 0
+            t1 = int(2*np.pi / (1/self.period) / (self.hanning_dt/self.cycle))
+            env = hanning(1/self.period, t, self.cycle) if t < t1 else 0
         else:
-            vect = self.profile * bd.exp(1j * (self.omega * q + self.phase_shift))
+            env = 1
 
-        for x, y, z, value in zip(self.x, self.y, self.z, vect):
-            self.grid.E[x, y, z, 0] += value
-
-    def update_H(self):
-        pass
-
-    def __repr__(self):
-        return (
-            f"{self.__class__.__name__}(period={self.period}, "
-            f"amplitude={self.amplitude}, phase_shift={self.phase_shift}, "
-            f"name={repr(self.name)})"
-        )
-
-    def __str__(self):
-        s = "    " + repr(self) + "\n"
-        x = f"[{self.x[0]}, ... , {self.x[-1]}]"
-        y = f"[{self.y[0]}, ... , {self.y[-1]}]"
-        z = f"[{self.z[0]}, ... , {self.z[-1]}]"
-        s += f"        @ x={x}, y={y}, z={z}\n"
-        return s
-
-
-# DirectionalComplexPlaneWave2D class
-class DirectionalComplexPlaneWave2D:
-    """A 2D plane wave source (Ez polarization)"""
-
-    def __init__(
-        self,
-        wavelength: float,
-        period: float,
-        amplitude: complex = 1.0 + 0.0j,
-        phase_shift: float = 0.0,
-        direction: str = "z+", # Direction of the wave propagation, e.g., "z+", "x-", etc.
-        name: str = None,
-        pulse: bool = False,
-        cycle: int = 5,
-        hanning_dt: float = None,
-    ):
-        self.grid = None
-        self.wavelength = wavelength
-        self.period = period
-        self.frequency = 1.0 / period
-        self.amplitude = bd.complex(amplitude)
-        self.omega = 2 * np.pi * bd.c0 / wavelength
-        self.phase_shift = phase_shift
-        self.name = name
-        self.pulse = pulse
-        self.cycle = cycle
-        self.hanning_dt = hanning_dt
-        self.direction = direction
-
-    def _register_grid(
-        self, grid: Grid, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice
-    ):
-        self.grid = grid
-        self.grid.sources.append(self)
-        if self.name is not None:
-            if not hasattr(grid, self.name):
-                setattr(grid, self.name, self)
-
-        # 儲存 slice 區間（與 ComplexLineSource 相同）
-        self.x, self.y, self.z = self._handle_slices(x, y, z)
-
-        # 平面波：profile 為常數 1
-        L = len(self.x)
-        self.profile = bd.ones(L, dtype=bd.complex) * self.amplitude
-        
-        if self.hanning_dt is None:
-            self.hanning_dt = self.grid.time_step # 統一時間單位
-
-    def _handle_slices(
-        self, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice
-    ) -> Tuple[List, List, List]:
-        """Convert slices in the grid to lists
-
-        This is necessary to make the source span the diagonal of the volume
-        defined by the slices.
-
-        Args:
-            x: The x-location of the volume in the grid
-            y: The y-location of the volume in the grid
-            z: The z-location of the volume in the grid
-
-        Returns:
-            x, y, z: the x, y and z coordinates of the source as lists
-
-        """
-
-        # if list-indices were chosen:
-        if isinstance(x, list) and isinstance(y, list) and isinstance(z, list):
-            if len(x) != len(y) or len(y) != len(z) or len(z) != len(x):
-                raise IndexError(
-                    "sources require grid to be indexed with slices or equal length list-indices"
-                )
-            x = [self.grid._handle_distance(_x) for _x in x]
-            y = [self.grid._handle_distance(_y) for _y in y]
-            z = [self.grid._handle_distance(_z) for _z in z]
-            return x, y, z
-
-        # if a combination of list-indices and slices were chosen,
-        # convert the list-indices to slices.
-        # TODO: maybe issue a warning here?
-        if isinstance(x, list):
-            x = slice(
-                self.grid._handle_distance(x[0]),
-                self.grid._handle_distance(x[-1]),
-                None,
-            )
-        if isinstance(y, list):
-            y = slice(
-                self.grid._handle_distance(y[0]),
-                self.grid._handle_distance(y[-1]),
-                None,
-            )
-        if isinstance(z, list):
-            z = slice(
-                self.grid._handle_distance(z[0]),
-                self.grid._handle_distance(z[-1]),
-                None,
-            )
-
-        # if we get here, we can assume slices:
-        x0 = self.grid._handle_distance(x.start if x.start is not None else 0)
-        y0 = self.grid._handle_distance(y.start if y.start is not None else 0)
-        z0 = self.grid._handle_distance(z.start if z.start is not None else 0)
-        x1 = self.grid._handle_distance(x.stop if x.stop is not None else self.grid.Nx)
-        y1 = self.grid._handle_distance(y.stop if y.stop is not None else self.grid.Ny)
-        z1 = self.grid._handle_distance(z.stop if z.stop is not None else self.grid.Nz)
-
-        # we can now convert these coordinates into index lists
-        m = max(abs(x1 - x0), abs(y1 - y0), abs(z1 - z0))
-        if m < 2:
-            raise ValueError("a LineSource should consist of at least two gridpoints")
-        x = [v.item() for v in bd.array(bd.linspace(x0, x1, m, endpoint=False), bd.int)]
-        y = [v.item() for v in bd.array(bd.linspace(y0, y1, m, endpoint=False), bd.int)]
-        z = [v.item() for v in bd.array(bd.linspace(z0, z1, m, endpoint=False), bd.int)]
-
-        return x, y, z
-
-    def update_E(self):
-        # q = self.grid.time_steps_passed * self.grid.time_step  # convert to time
-        q = self.grid.time_steps_passed * self.hanning_dt 
-
-        if self.pulse:
-            t1 = int(2 * np.pi / (self.frequency * self.hanning_dt / self.cycle))
-            if q < t1:
-                env = hanning(self.frequency, q * self.hanning_dt, self.cycle)
-                vect = self.profile * bd.exp(1j * (self.omega * q + self.phase_shift)) * env
-            else:
-                vect = 0
-        else:
-            vect = self.profile * bd.exp(1j * (self.omega * q + self.phase_shift))
-        
-        # === 加入方向性處理 ===
-        z_array = bd.array(self.z)
-        center_z = (min(self.z) + max(self.z)) // 2
-
-        if self.direction == "z+":
-            mask = z_array >= center_z
-        elif self.direction == "z-":
-            mask = z_array < center_z
-        else:
-            mask = bd.ones_like(z_array, dtype=bool)
-        vect = vect * mask
-
-        for x, y, z, value in zip(self.x, self.y, self.z, vect):
-            self.grid.E[x, y, z, 0] += value
+        for xi, zi in zip(self.x, self.z):
+            phi_sp = self.spatial_phase[(xi, zi)]
+            phase = self.omega * t + self.phase_shift + phi_sp
+            val = self.amplitude * bd.exp(1j * phase) * env
+            self.grid.E[xi, 0, zi, self.pol_index] += val
 
     def update_H(self):
         pass

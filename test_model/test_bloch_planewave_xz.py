@@ -1,22 +1,24 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import os
 import numpy as np
 import matplotlib.pyplot as plt
 from IPython.display import clear_output
 from scipy.ndimage import gaussian_filter1d
-from scipy.signal import hilbert
 import fdtd
-from fdtd.fdtd_helper import um, nm, to_grid
 
 # === 模擬參數 ===
 fdtd.set_backend("numpy")
-wavelength = nm(850)
-grid_spacing = nm(20)
-x_span, z_span = um(2), um(6)
-Nx = to_grid(x_span, grid_spacing)
-Nz = to_grid(z_span, grid_spacing)
+wavelength = fdtd.nm(850)
+grid_spacing = fdtd.nm(20)
+x_span, z_span = fdtd.um(2), fdtd.um(6)
+Nx = fdtd.to_grid(x_span, grid_spacing)
+Nz = fdtd.to_grid(z_span, grid_spacing)
 
 # === Bloch 入射角設定（沿 x 入射無用，可保留結構）===
-theta_deg = 0
+theta_deg = 20
 theta = np.deg2rad(theta_deg)
 k0 = 2 * np.pi / wavelength
 kx = k0 * np.sin(theta)
@@ -31,7 +33,9 @@ grid = fdtd.Grid(
 
 # === 邊界條件 ===
 grid[0, :, :] = fdtd.BlochBoundary(k_component=kx, length=Lx, name="bloch")
-# grid[-1, 0, :] = fdtd.BlochBoundary(k_component=-kx, length=Lx, name="bloch_right")
+# grid[0, :, :] = fdtd.PeriodicBoundary(name="periodic")
+# grid[:10, :, :10] = fdtd.PML(name="pml_right")
+# grid[-10:, :, -10:] = fdtd.PML(name="pml_left")
 grid[:, :, :10] = fdtd.PML(name="pml_front")
 grid[:, :, -10:] = fdtd.PML(name="pml_back")
 grid.promote_dtypes_to_complex()
@@ -40,36 +44,41 @@ grid.promote_dtypes_to_complex()
 simfolder = grid.save_simulation("test_bloch_xz")
 
 # === 材料層：z = 2–3 µm，n = 1.5 ===
-start_z = to_grid(um(2), grid_spacing)
-end_z = to_grid(um(3), grid_spacing)
+start_x = fdtd.to_grid(fdtd.um(0.5), grid_spacing)
+end_x = fdtd.to_grid(fdtd.um(1.5), grid_spacing)
+start_z = fdtd.to_grid(fdtd.um(2), grid_spacing)
+end_z = fdtd.to_grid(fdtd.um(3), grid_spacing)
 grid[:, 0, start_z:end_z] = fdtd.Object(n=1.5, k=0, name="n=1.5")
+# grid[start_x:end_x, 0, start_z:end_z] = fdtd.Object(n=1.5, k=0, name="n=1.5")
 
 # === 光源：z = 1 µm，橫跨 x ===
-source_z = to_grid(um(1), grid_spacing)
+source_z = fdtd.to_grid(fdtd.um(1), grid_spacing)
 
-grid[:, 0, source_z:source_z+1] = fdtd.DirectionalComplexPlaneWave2D(
+grid[:, 0, source_z:source_z+1] = fdtd.ComplexPlaneWave(
     wavelength=wavelength,
     period=wavelength / 3e8,
     amplitude=1.0 + 0j,
+    theta_deg=theta_deg,  # ⬅️ 入射角度
+    polarization_axis="x",  # ⬅️ 根據你目前是 XZ 平面使用 Ex
     pulse=False,
-    cycle=1,
-    name="plane_source",
-    # direction="z+"
+    name="my_directional_source"
 )
 
 # === 偵測器：穿透 z = 5 µm，反射 z = 0.5 µm（可選）===
-det_z_T = to_grid(um(5), grid_spacing)
-det_z_R = to_grid(um(0.5), grid_spacing)
-field_x1 = to_grid(um(1), grid_spacing)
-field_x2 = to_grid(um(4), grid_spacing)
-field_z1 = to_grid(um(1.5), grid_spacing)
-field_z2 = to_grid(um(3.5), grid_spacing)
+det_z_T = fdtd.to_grid(fdtd.um(5), grid_spacing)
+det_z_R = fdtd.to_grid(fdtd.um(0.5), grid_spacing)
+field_x1 = fdtd.to_grid(fdtd.um(1), grid_spacing)
+field_x2 = fdtd.to_grid(fdtd.um(4), grid_spacing)
+field_z1 = fdtd.to_grid(fdtd.um(1.5), grid_spacing)
+field_z2 = fdtd.to_grid(fdtd.um(3.5), grid_spacing)
 grid[:, 0, det_z_T:det_z_T+1] = fdtd.LineDetector(name="detector_transmit")
 grid[:, 0, det_z_R:det_z_R+1] = fdtd.LineDetector(name="detector_reflect")
 # grid[field_x1:field_x2, 0, field_z1:field_z2] = fdtd.BlockDetector(name="detector_field")
 
+fdtd.plot_simulation_domain(grid, plane='xz', mode='n')
+
 # === 執行模擬 ===
-for t in range(500):
+for t in range(0):
     grid.step()
     if t % 10 == 0:
         # fig = grid.visualize(y=0, animate=True, index=t, save=True, folder=simfolder)

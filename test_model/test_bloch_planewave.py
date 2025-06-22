@@ -14,7 +14,7 @@ Nx = to_grid(x_span, grid_spacing)
 Ny = to_grid(y_span, grid_spacing)
 
 # === 入射角與 Bloch 相位設定 ===
-theta_deg = 0
+theta_deg = 1
 theta = np.deg2rad(theta_deg)
 k0 = 2 * np.pi / wavelength
 kx = k0 * np.sin(theta)
