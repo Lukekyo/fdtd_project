@@ -33,6 +33,13 @@ def get_extent(grid, plane: str):
     else:
         raise ValueError(f"Unsupported plane: {plane}")
 
+def idx_to_um(val, dx):
+    if isinstance(val, (list, tuple)):
+        # if lst is a list or tuple, convert each element
+        return [i * dx * 1e6 for i in val]
+    else:
+        # if lst is a single value, convert it directly
+        return val * dx * 1e6
 # 2D visualization function
 
 def visualize(
@@ -42,7 +49,7 @@ def visualize(
     z=None,
     cmap="bwr",
     pbcolor="C3",
-    blochcolor="C4",
+    bbcolor="C4",
     pmlcolor=(0, 0, 0, 0.1),
     objcolor=(1, 0, 0, 0.1),
     srccolor="C0",
@@ -85,11 +92,11 @@ def visualize(
     if norm not in ("linear", "lin", "log"):
         raise ValueError("Color map normalization should be 'linear' or 'log'.")
 
-    from .sources import PointSource, LineSource, PlaneSource, ComplexLineSource
+    from .sources import PointSource, LineSource, PlaneSource, ComplexPlaneWave
     from .boundaries import (
         _PeriodicBoundaryX, _PeriodicBoundaryY, _PeriodicBoundaryZ,
         _PMLXlow, _PMLXhigh, _PMLYlow, _PMLYhigh, _PMLZlow, _PMLZhigh,
-        BlochBoundary
+        _BlochBoundaryX, _BlochBoundaryY, _BlochBoundaryZ
     )
 
     if animate:  # pause for 0.1s, clear plot
@@ -127,7 +134,7 @@ def visualize(
     # 先檢查使用到了哪些元素
     has_pml = any(isinstance(b, (_PMLXlow, _PMLXhigh, _PMLYlow, _PMLYhigh, _PMLZlow, _PMLZhigh)) for b in grid.boundaries)
     has_pb = any(isinstance(b, (_PeriodicBoundaryX, _PeriodicBoundaryY, _PeriodicBoundaryZ)) for b in grid.boundaries)
-    has_bloch = any(isinstance(b, BlochBoundary) for b in grid.boundaries)
+    has_bloch = any(isinstance(b, (_BlochBoundaryX, _BlochBoundaryY, _BlochBoundaryZ)) for b in grid.boundaries)
     has_src = len(grid.sources) > 0
     has_det = len(grid.detectors) > 0
 
@@ -137,19 +144,11 @@ def visualize(
     if has_pb:
         plt.plot([], lw=3, color=pbcolor, label="Periodic Boundaries")
     if has_bloch:
-        plt.plot([], lw=3, color=blochcolor, label="Bloch Boundaries")
+        plt.plot([], lw=3, color=bbcolor, label="Bloch Boundaries")
     if has_src:
         plt.plot([], lw=3, color=srccolor, label="Sources")
     if has_det:
         plt.plot([], lw=3, color=detcolor, label="Detectors")
-
-    # # just to create the right legend entries:
-    # plt.plot([], lw=7, color=objcolor, label="Objects")
-    # plt.plot([], lw=7, color=pmlcolor, label="PML")
-    # plt.plot([], lw=3, color=pbcolor, label="Periodic Boundaries")
-    # plt.plot([], lw=3, color=srccolor, label="Sources")
-    # plt.plot([], lw=3, color=detcolor, label="Detectors")
-    # plt.plot([], lw=3, color=blochcolor, label="Bloch Boundaries")
 
     # Grid energy
     grid_energy = bd.sum(grid.E**2 + grid.H**2, -1)
@@ -158,6 +157,7 @@ def visualize(
         xlabel, ylabel = "y", "z"
         Nx, Ny = grid.Ny, grid.Nz
         pbx, pby = _PeriodicBoundaryY, _PeriodicBoundaryZ
+        bbx, bby = _BlochBoundaryY, _BlochBoundaryZ
         pmlxl, pmlxh, pmlyl, pmlyh = _PMLYlow, _PMLYhigh, _PMLZlow, _PMLZhigh
         grid_energy = grid_energy[x, :, :]
     elif y is not None:
@@ -165,6 +165,7 @@ def visualize(
         xlabel, ylabel = "z", "x"
         Nx, Ny = grid.Nz, grid.Nx
         pbx, pby = _PeriodicBoundaryZ, _PeriodicBoundaryX
+        bbx, bby = _BlochBoundaryZ, _BlochBoundaryX
         pmlxl, pmlxh, pmlyl, pmlyh = _PMLZlow, _PMLZhigh, _PMLXlow, _PMLXhigh
         grid_energy = grid_energy[:, y, :].T
     elif z is not None:
@@ -172,6 +173,7 @@ def visualize(
         xlabel, ylabel = "x", "y"
         Nx, Ny = grid.Nx, grid.Ny
         pbx, pby = _PeriodicBoundaryX, _PeriodicBoundaryY
+        bbx, bby = _BlochBoundaryX, _BlochBoundaryY
         pmlxl, pmlxh, pmlyl, pmlyh = _PMLXlow, _PMLXhigh, _PMLYlow, _PMLYhigh
         grid_energy = grid_energy[:, :, z]
     else:
@@ -196,7 +198,7 @@ def visualize(
             grid_energy = grid_energy[:, :, z]
 
     for source in grid.sources:
-        if isinstance(source, LineSource):
+        if isinstance(source, (LineSource, ComplexPlaneWave)):
             if x is not None:
                 _x = [source.y[0], source.y[-1]]
                 _y = [source.z[0], source.z[-1]]
@@ -206,17 +208,8 @@ def visualize(
             elif z is not None:
                 _x = [source.x[0], source.x[-1]]
                 _y = [source.y[0], source.y[-1]]
-            plt.plot(_y, _x, lw=3, color=srccolor)
-        elif isinstance(source, ComplexLineSource):
-            if x is not None:
-                _x = [source.y[0], source.y[-1]]
-                _y = [source.z[0], source.z[-1]]
-            elif y is not None:
-                _x = [source.z[0], source.z[-1]]
-                _y = [source.x[0], source.x[-1]]
-            elif z is not None:
-                _x = [source.x[0], source.x[-1]]
-                _y = [source.y[0], source.y[-1]]
+            _x = idx_to_um(_x, grid.grid_spacing)
+            _y = idx_to_um(_y, grid.grid_spacing)
             plt.plot(_y, _x, lw=3, color=srccolor)
         elif isinstance(source, PointSource):
             if x is not None:
@@ -228,6 +221,8 @@ def visualize(
             elif z is not None:
                 _x = source.x
                 _y = source.y
+            _x = idx_to_um(_x, grid.grid_spacing)
+            _y = idx_to_um(_y, grid.grid_spacing)
             plt.plot(_y - 0.5, _x - 0.5, lw=3, marker="o", color=srccolor)
             grid_energy[_x, _y] = 0  # do not visualize energy at location of source
         elif isinstance(source, PlaneSource):
@@ -285,6 +280,8 @@ def visualize(
         elif z is not None:
             _x = [detector.x[0], detector.x[-1]]
             _y = [detector.y[0], detector.y[-1]]
+        _x = idx_to_um(_x, grid.grid_spacing)
+        _y = idx_to_um(_y, grid.grid_spacing)
 
         if detector.__class__.__name__ == "BlockDetector":
             # BlockDetector
@@ -300,29 +297,51 @@ def visualize(
 
     # Boundaries
     for boundary in grid.boundaries:
+
+        # periodic boundary
         if isinstance(boundary, pbx):
             _x = [-0.5, -0.5, float("nan"), Nx - 0.5, Nx - 0.5]
             _y = [-0.5, Ny - 0.5, float("nan"), -0.5, Ny - 0.5]
-            plt.plot(_y, _x, color=pbcolor, linewidth=3)
+            _x = idx_to_um(_x, grid.grid_spacing)
+            _y = idx_to_um(_y, grid.grid_spacing)
+            plt.plot(_y, _x, color=pbcolor, linewidth=5)
         elif isinstance(boundary, pby):
             _x = [-0.5, Nx - 0.5, float("nan"), -0.5, Nx - 0.5]
             _y = [-0.5, -0.5, float("nan"), Ny - 0.5, Ny - 0.5]
-            plt.plot(_y, _x, color=pbcolor, linewidth=3)
+            _x = idx_to_um(_x, grid.grid_spacing)
+            _y = idx_to_um(_y, grid.grid_spacing)
+            plt.plot(_y, _x, color=pbcolor, linewidth=5)
+
+        # bloch boundary
+        if isinstance(boundary, bbx):
+            _x = [-0.5, -0.5, float("nan"), Nx - 0.5, Nx - 0.5]
+            _y = [-0.5, Ny - 0.5, float("nan"), -0.5, Ny - 0.5]
+            _x = idx_to_um(_x, grid.grid_spacing)
+            _y = idx_to_um(_y, grid.grid_spacing)
+            plt.plot(_y, _x, color=bbcolor, linewidth=5)
+        elif isinstance(boundary, bby):
+            _x = [-0.5, Nx - 0.5, float("nan"), -0.5, Nx - 0.5]
+            _y = [-0.5, -0.5, float("nan"), Ny - 0.5, Ny - 0.5]
+            _x = idx_to_um(_x, grid.grid_spacing)
+            _y = idx_to_um(_y, grid.grid_spacing)
+            plt.plot(_y, _x, color=bbcolor, linewidth=5)
+        
+        # pml boundar
         elif isinstance(boundary, pmlyl):
-            patch = ptc.Rectangle(
-                xy=(-0.5, -0.5),
-                width=boundary.thickness,
-                height=Nx,
+                patch = ptc.Rectangle(
+                xy = (idx_to_um(-0.5, grid.grid_spacing), idx_to_um(-0.5, grid.grid_spacing)),
+                width = idx_to_um(boundary.thickness, grid.grid_spacing),
+                height = idx_to_um(Nx, grid.grid_spacing),
                 linewidth=0,
                 edgecolor="none",
                 facecolor=pmlcolor,
             )
-            plt.gca().add_patch(patch)
+                plt.gca().add_patch(patch)
         elif isinstance(boundary, pmlxl):
             patch = ptc.Rectangle(
-                xy=(-0.5, -0.5),
-                width=Ny,
-                height=boundary.thickness,
+                xy = (idx_to_um(-0.5, grid.grid_spacing), idx_to_um(-0.5, grid.grid_spacing)),
+                width = idx_to_um(Ny, grid.grid_spacing),
+                height = idx_to_um(boundary.thickness, grid.grid_spacing),
                 linewidth=0,
                 edgecolor="none",
                 facecolor=pmlcolor,
@@ -330,9 +349,9 @@ def visualize(
             plt.gca().add_patch(patch)
         elif isinstance(boundary, pmlyh):
             patch = ptc.Rectangle(
-                xy=(Ny - 0.5 - boundary.thickness, -0.5),
-                width=boundary.thickness,
-                height=Nx,
+                xy = (idx_to_um(Ny - 0.5 - boundary.thickness, grid.grid_spacing), idx_to_um(-0.5, grid.grid_spacing)),
+                width = idx_to_um(boundary.thickness, grid.grid_spacing),
+                height = idx_to_um(Nx, grid.grid_spacing),
                 linewidth=0,
                 edgecolor="none",
                 facecolor=pmlcolor,
@@ -340,25 +359,15 @@ def visualize(
             plt.gca().add_patch(patch)
         elif isinstance(boundary, pmlxh):
             patch = ptc.Rectangle(
-                xy=(-0.5, Nx - boundary.thickness - 0.5),
-                width=Ny,
-                height=boundary.thickness,
+                xy = (idx_to_um(-0.5, grid.grid_spacing), idx_to_um(Nx - boundary.thickness - 0.5, grid.grid_spacing)),
+                # xy=(-0.5, Nx - boundary.thickness - 0.5),
+                width = idx_to_um(Ny, grid.grid_spacing),
+                height = idx_to_um(boundary.thickness, grid.grid_spacing),
                 linewidth=0,
                 edgecolor="none",
                 facecolor=pmlcolor,
             )
             plt.gca().add_patch(patch)
-        elif isinstance(boundary, BlochBoundary):
-            # 若有 z 切面顯示 (最常見情況)
-            if z is not None:
-                if boundary.x in [0, -1]:  # 左右
-                    _x = [-0.5, -0.5, float("nan"), Nx - 0.5, Nx - 0.5]
-                    _y = [-0.5, Ny - 0.5, float("nan"), -0.5, Ny - 0.5]
-                    plt.plot(_y, _x, color=blochcolor, linewidth=3)
-                elif boundary.y in [0, -1]:  # 上下
-                    _x = [-0.5, Nx - 0.5, float("nan"), -0.5, Nx - 0.5]
-                    _y = [-0.5, -0.5, float("nan"), Ny - 0.5, Ny - 0.5]
-                    plt.plot(_y, _x, color=blochcolor, linewidth=3)
 
     for obj in grid.objects:
         if x is not None:
@@ -370,10 +379,11 @@ def visualize(
         elif z is not None:
             _x = (obj.x.start, obj.x.stop)
             _y = (obj.y.start, obj.y.stop)
-
+        _x = idx_to_um(_x, grid.grid_spacing)
+        _y = idx_to_um(_y, grid.grid_spacing)
         # 為每個 object 分別畫 patch，並用 name 當 label
         patch = ptc.Rectangle(
-            xy=(min(_y) - 0.5, min(_x) - 0.5),
+            xy=(min(_y), min(_x)),
             width=max(_y) - min(_y),
             height=max(_x) - min(_x),
             linewidth=0,
@@ -404,6 +414,7 @@ def visualize(
         vmax = amp,
         interpolation="sinc", 
         extent=extent,
+        origin="lower",
         norm=cmap_norm)
 
     # finalize the plot

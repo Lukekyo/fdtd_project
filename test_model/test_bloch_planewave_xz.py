@@ -10,7 +10,7 @@ import fdtd
 
 # === 模擬參數 ===
 fdtd.set_backend("numpy")
-wavelength = fdtd.nm(850)
+wavelength = fdtd.nm(1550)
 grid_spacing = fdtd.nm(20)
 x_span, z_span = fdtd.um(2), fdtd.um(6)
 Nx = fdtd.to_grid(x_span, grid_spacing)
@@ -37,7 +37,7 @@ grid[0, :, :] = fdtd.BlochBoundary(k_component=kx, length=Lx, name="bloch")
 # grid[-10:, :, -10:] = fdtd.PML(name="pml_left")
 grid[:, :, :10] = fdtd.PML(name="pml_front")
 grid[:, :, -10:] = fdtd.PML(name="pml_back")
-grid.promote_dtypes_to_complex()
+# grid.promote_dtypes_to_complex()
 
 # === 儲存資料夾 ===
 simfolder = grid.save_simulation("test_bloch_xz")
@@ -46,7 +46,7 @@ simfolder = grid.save_simulation("test_bloch_xz")
 start_x = fdtd.to_grid(fdtd.um(0.5), grid_spacing)
 end_x = fdtd.to_grid(fdtd.um(1.5), grid_spacing)
 start_z = fdtd.to_grid(fdtd.um(2), grid_spacing)
-end_z = fdtd.to_grid(fdtd.um(3), grid_spacing)
+end_z = fdtd.to_grid(fdtd.um(2.5), grid_spacing)
 grid[:, 0, start_z:end_z] = fdtd.Object(n=1.5, k=0, name="n=1.5")
 # grid[start_x:end_x, 0, start_z:end_z] = fdtd.Object(n=1.5, k=0, name="n=1.5")
 
@@ -91,7 +91,6 @@ time.sleep(2)
 for t in range(500):
     grid.step()
     if t % 10 == 0:
-        # fig = grid.visualize(y=0, animate=True, index=t, save=True, folder=simfolder)
         fig = grid.visualize(y=0, 
                              animate=True, 
                              index=t, 
@@ -102,8 +101,6 @@ for t in range(500):
                              )
         plt.title(f"t = {t}")
         ax = plt.gca()
-        # ax.set_xticklabels([f"{x * grid_spacing * 1e6:.1f}" for x in ax.get_xticks()])
-        # ax.set_yticklabels([f"{z * grid_spacing * 1e6:.1f}" for z in ax.get_yticks()])
         ax.set_xlabel("x (µm)")
         ax.set_ylabel("z (µm)")
         plt.tight_layout()
@@ -127,19 +124,22 @@ relative_intensity_T = intensity_T / total_power  # 穿透相對強度
 relative_intensity_R = intensity_R / total_power  # 反射相對強度
 
 # === 切片位置 ===
-center_idx = Ex_T.shape[1] // 2  # 取中間的切片
-Ex_center_real = Ex_T[:, center_idx].real  # 取 Ex_T 在中心位置的實部
-smoothed = gaussian_filter1d(Ex_center_real, sigma=5)  # 平滑處理
+center_idx_T = Ex_T.shape[1] // 2  # 取中間的切片
+center_idx_R = Ex_T.shape[1] // 2  # 取中間的切片
+Ex_center_real_T = Ex_T[:, center_idx_T].real  # 取 Ex_T 在中心位置的實部
+Ex_center_real_R = Ex_R[:, center_idx_R].real  # 取 Ex_T 在中心位置的實部
+smoothed_T = gaussian_filter1d(Ex_center_real_T, sigma=5)  # 平滑處理
+smoothed_R = gaussian_filter1d(Ex_center_real_R, sigma=5)  # 平滑處理
 
 # === 時間軸 ===
 time_array = np.arange(len(intensity_T)) * grid.time_step * 1e15
 
 # === 繪圖：穿透與反射 ===
 plt.figure()
-plt.plot(time_array, Ex_center_real, label="Real(Ex) (z=5 µm)")
-plt.plot(time_array, smoothed, label="smoothed (z=5 µm)")
-# plt.plot(time_array, relative_intensity_T, label="Transmitted Intensity (z=5 µm)")
-# plt.plot(time_array, relative_intensity_R, label="Reflected Intensity (z=0.5 µm)")
+# plt.plot(time_array, smoothed_T, label="smoothed_T (z=5 µm)")
+# plt.plot(time_array, smoothed_R, label="smoothed_R (z=1.5 µm)")
+plt.plot(time_array, relative_intensity_T, label="Transmitted Intensity (z=5 µm)")
+plt.plot(time_array, relative_intensity_R, label="Reflected Intensity (z=1.5 µm)")
 plt.title("Intensity vs Time step")
 plt.xlabel("Time (fs)")
 plt.ylabel("Intensity (|Ez|^2 summed)")
