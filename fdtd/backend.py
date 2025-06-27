@@ -187,11 +187,14 @@ class NumpyBackend(Backend):
 
     fft = staticmethod(numpy.fft.fft)
 
+    cross = staticmethod(numpy.cross)
+
     exp = staticmethod(numpy.exp)
     
     conj = staticmethod(numpy.conj)
 
     divide = staticmethod(numpy.divide)
+
     
 
     # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -241,6 +244,8 @@ if TORCH_AVAILABLE:
 
         exp = staticmethod(torch.exp)
         """ exponential of all elements in array """
+
+        cross = staticmethod(torch.cross)
 
         conj = staticmethod(torch.conj)
         """ conjugation of all elements in array """

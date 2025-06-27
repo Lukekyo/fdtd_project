@@ -30,6 +30,7 @@ class LineDetector:
         self.grid = None
         self.E = []
         self.H = []
+        self.S = []  # Stores the Poynting flux
         self.name = name
 
     def _register_grid(
@@ -122,6 +123,22 @@ class LineDetector:
         # TODO: there is a performance bottleneck here (indexing with lists)
         H = self.grid.H[self.x, self.y, self.z]
         self.H.append(H)
+        self.detect_S()
+
+    def detect_S(self):
+        """ 計算截面當下的 Poynting flux 並整合後存於 self.S"""
+        # 取得 E 和 H 的場值，形狀為 (N_line, 3)
+        E = bd.array(self.grid.E[self.x, self.y, self.z])
+        H = bd.array(self.grid.H[self.x, self.y, self.z])
+
+        # 計算逐點 Poynting 向量：S = Re(E x H*)
+        S_vec = bd.real(bd.cross(E, bd.conj(H)))
+
+        # 針對傳播方向(假設為 z 方向，index=2)整合為標量通量
+        S_scalar = S_vec[:, 2].sum()
+
+        # 存入時序列表
+        self.S.append(S_scalar)
 
     def __repr__(self):
         return f"{self.__class__.__name__}(name={repr(self.name)})"
@@ -146,6 +163,7 @@ class LineDetector:
         #         "Hz": self.H[..., 2],}
         E_array = bd.array(self.E)  # 將 self.E 轉換為陣列
         H_array = bd.array(self.H)  # 將 self.H 轉換為陣列
+        S_array = bd.array(self.S)  # 將 self.S 轉換為陣列
 
         return {
             "E": E_array,
@@ -156,6 +174,10 @@ class LineDetector:
             "Hx": H_array[..., 0],
             "Hy": H_array[..., 1],
             "Hz": H_array[..., 2],
+            "Sx": S_array[..., 0],
+            "Sy": S_array[..., 1],
+            "Sz": S_array[..., 2],
+            "S": S_array
         }
 
 
