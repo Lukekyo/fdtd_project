@@ -20,7 +20,7 @@ from .constants import X, Y, Z
 class LineDetector:
     """ A detector along a line in the FDTD grid """
 
-    def __init__(self, name=None):
+    def __init__(self, name=None, flip_sign=False, direction_idx = 2):
         """Create a line detector
 
         Args:
@@ -32,6 +32,8 @@ class LineDetector:
         self.H = []
         self.S = []  # Stores the Poynting flux
         self.name = name
+        self.flip_sign = flip_sign
+        self.direction_idx = direction_idx  # Index for the propagation direction (default is Z)
 
     def _register_grid(
         self, grid: Grid, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice
@@ -135,7 +137,9 @@ class LineDetector:
         S_vec = bd.real(bd.cross(E, bd.conj(H)))
 
         # 針對傳播方向(假設為 z 方向，index=2)整合為標量通量
-        S_scalar = S_vec[:, 2].sum()
+        S_scalar = S_vec[:, self.direction_idx].sum()
+        if self.flip_sign:
+            S_scalar = -S_scalar
 
         # 存入時序列表
         self.S.append(S_scalar)

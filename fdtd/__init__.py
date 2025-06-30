@@ -12,6 +12,6 @@ from .backend import backend
 from .backend import set_backend
 from .fourier import FrequencyRoutines
 from .visualization import dB_map_2D, plot_detection
-from .fdtd_helper import um, nm, to_grid, from_grid
+from .fdtd_helper import um, nm, to_grid, from_grid, reference_run
 from .visualize_domain import plot_simulation_domain    
     

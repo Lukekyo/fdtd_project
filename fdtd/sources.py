@@ -21,6 +21,11 @@ from .backend import backend as bd
 from .waveforms import *
 from .detectors import CurrentDetector
 
+# relative
+eta0 = 376.73  # 真空阻抗 (Ω)
+n0 = 1.0       # 空氣折射率
+eta0_medium = eta0 / n0  # 本徵阻抗（空氣）
+
 ## PointSource class
 class PointSource:
     """A source placed at a single point (grid cell) in the grid"""
@@ -690,6 +695,7 @@ class ComplexPlaneWave:
         pulse: bool = False,
         cycle: int = 5,
         hanning_dt: float = None,
+        medium_n: float = None
     ):
         self.grid = None
         self.wavelength = wavelength
@@ -704,6 +710,8 @@ class ComplexPlaneWave:
         self.cycle = cycle
         self.hanning_dt = hanning_dt
         self.polarization_axis = polarization_axis.lower()
+        self.n = medium_n if medium_n is not None else 1.0
+        self.eta = eta0/self.n  # calculate the impedance of the medium
 
     def _register_grid(self, grid: Grid, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice):
         self.grid = grid
@@ -809,7 +817,8 @@ class ComplexPlaneWave:
         for xi, zi in zip(self.x, self.z):
             phi_sp = self.spatial_phase[(xi, zi)]
             phase = self.omega * t + self.phase_shift + phi_sp
-            val = self.amplitude * bd.exp(1j * phase) * env
+            # 加入阻抗
+            val = (self.amplitude / self.eta) * bd.exp(1j * phase) * env
             self.grid.E[xi, 0, zi, self.pol_index] += val
 
     def update_H(self):
