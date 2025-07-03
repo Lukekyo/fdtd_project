@@ -1,108 +1,438 @@
+# Grid.py 修正版本
 
 import os
-import matplotlib.pyplot as plt
-import matplotlib.patches as ptc
-from matplotlib.colors import LogNorm
+from os import path, makedirs, chdir, remove
+from subprocess import check_call, CalledProcessError
+from glob import glob
+from datetime import datetime
+import numpy as np
+
+from tqdm import tqdm
+from numpy import savez
 
 from .backend import backend as bd
+from . import constants as const
 
-def visualize(
-    grid,
-    x=None,
-    y=None,
-    z=None,
-    cmap="Blues",
-    pbcolor="C3",
-    pmlcolor=(0, 0, 0, 0.1),
-    objcolor=(1, 0, 0, 0.1),
-    blochcolor=(0.6, 0.4, 0.9, 0.8),
-    srccolor="C0",
-    detcolor="C2",
-    norm="linear",
-    animate=False,
-    index=None,
-    save=False,
-    folder=None,
-    show=False,
-    style=None,
-    real_field_mode=False,
-    real_component="Ex",
+def curl_E(E):
+“”“修正的curl_E函數，確保數據類型一致性”””
+# 確保輸出數據類型與輸入一致
+curl = bd.zeros(E.shape, dtype=E.dtype)
+
+```
+# curlx = dEz/dy - dEy/dz
+curl[:, :-1, :, 0] += E[:, 1:, :, 2] - E[:, :-1, :, 2]
+curl[:, :, :-1, 0] -= E[:, :, 1:, 1] - E[:, :, :-1, 1]
+
+# curly = dEx/dz - dEz/dx
+curl[:, :, :-1, 1] += E[:, :, 1:, 0] - E[:, :, :-1, 0]
+curl[:-1, :, :, 1] -= E[1:, :, :, 2] - E[:-1, :, :, 2]
+
+# curlz = dEy/dx - dEx/dy
+curl[:-1, :, :, 2] += E[1:, :, :, 1] - E[:-1, :, :, 1]
+curl[:, :-1, :, 2] -= E[:, 1:, :, 0] - E[:, :-1, :, 0]
+
+return curl
+```
+
+def curl_H(H):
+“”“修正的curl_H函數，確保數據類型一致性”””
+# 確保輸出數據類型與輸入一致
+curl = bd.zeros(H.shape, dtype=H.dtype)
+
+```
+# curlx = dHz/dy - dHy/dz
+curl[:, 1:, :, 0] += H[:, 1:, :, 2] - H[:, :-1, :, 2]
+curl[:, :, 1:, 0] -= H[:, :, 1:, 1] - H[:, :, :-1, 1]
+
+# curly = dHx/dz - dHz/dx
+curl[:, :, 1:, 1] += H[:, :, 1:, 0] - H[:, :, :-1, 0]
+curl[1:, :, :, 1] -= H[1:, :, :, 2] - H[:-1, :, :, 2]
+
+# curlz = dHy/dx - dHx/dy
+curl[1:, :, :, 2] += H[1:, :, :, 1] - H[:-1, :, :, 1]
+curl[:, 1:, :, 2] -= H[:, 1:, :, 0] - H[:, :-1, :, 0]
+
+return curl
+```
+
+class Grid:
+“”“修正的FDTD Grid類”””
+
+```
+from .visualization import visualize
+
+def __init__(
+    self,
+    shape,
+    grid_spacing: float = 155e-9,
+    permittivity: float = 1.0,
+    permeability: float = 1.0,
+    courant_number: float = None,
+    force_complex: bool = True,  # 新增參數強制使用複數
 ):
-    if style is not None:
-        plt.style.use(style)
-    if norm not in ("linear", "lin", "log"):
-        raise ValueError("Color map normalization should be 'linear' or 'log'.")
+    # 保存網格間距
+    self.grid_spacing = float(grid_spacing)
+    self.force_complex = force_complex
 
-    from .sources import PointSource, LineSource, PlaneSource, ComplexLineSource
-    from .boundaries import (
-        _PeriodicBoundaryX, _PeriodicBoundaryY, _PeriodicBoundaryZ,
-        _PMLXlow, _PMLXhigh, _PMLYlow, _PMLYhigh, _PMLZlow, _PMLZhigh,
-        BlochBoundary
+    # 處理網格形狀
+    self.Nx, self.Ny, self.Nz = self._handle_tuple(shape)
+
+    # 計算維度
+    self.D = int(self.Nx > 1) + int(self.Ny > 1) + int(self.Nz > 1)
+
+    # Courant數設置
+    max_courant_number = float(self.D) ** (-0.5)
+    if courant_number is None:
+        self.courant_number = 0.99 * max_courant_number
+    elif courant_number > max_courant_number:
+        raise ValueError(
+            f"courant_number {courant_number} too high for a {self.D}D simulation"
+        )
+    else:
+        self.courant_number = float(courant_number)
+
+    # 時間步長
+    self.time_step = self.courant_number * self.grid_spacing / const.c
+
+    # 初始化場（強制使用複數）
+    field_dtype = bd.complex if force_complex else bd.float
+    self.E = bd.zeros((self.Nx, self.Ny, self.Nz, 3), dtype=field_dtype)
+    self.H = bd.zeros((self.Nx, self.Ny, self.Nz, 3), dtype=field_dtype)
+
+    # 修正：介電常數和磁導率也使用複數類型以保持一致性
+    material_dtype = bd.complex if force_complex else bd.float
+    
+    if bd.is_array(permittivity) and len(permittivity.shape) == 3:
+        permittivity = permittivity[:, :, :, None]
+    self.inverse_permittivity = bd.ones((self.Nx, self.Ny, self.Nz, 3), dtype=material_dtype) / bd.array(
+        permittivity, dtype=material_dtype
     )
 
-    if animate:
-        plt.pause(0.02)
-        plt.clf()
-        plt.ion()
-
-    if x is not None:
-        assert grid.Ny > 1 and grid.Nz > 1
-        xlabel, ylabel = "y", "z"
-        Nx, Ny = grid.Ny, grid.Nz
-        pbx, pby = _PeriodicBoundaryY, _PeriodicBoundaryZ
-        pmlxl, pmlxh, pmlyl, pmlyh = _PMLYlow, _PMLYhigh, _PMLZlow, _PMLZhigh
-    elif y is not None:
-        assert grid.Nx > 1 and grid.Nz > 1
-        xlabel, ylabel = "z", "x"
-        Nx, Ny = grid.Nz, grid.Nx
-        pbx, pby = _PeriodicBoundaryZ, _PeriodicBoundaryX
-        pmlxl, pmlxh, pmlyl, pmlyh = _PMLZlow, _PMLZhigh, _PMLXlow, _PMLXhigh
-    elif z is not None:
-        assert grid.Nx > 1 and grid.Ny > 1
-        xlabel, ylabel = "x", "y"
-        Nx, Ny = grid.Nx, grid.Ny
-        pbx, pby = _PeriodicBoundaryX, _PeriodicBoundaryY
-        pmlxl, pmlxh, pmlyl, pmlyh = _PMLXlow, _PMLXhigh, _PMLYlow, _PMLYhigh
-    else:
-        raise ValueError("Visualization only works for 2D grids")
-
-    if real_field_mode:
-        comp_idx = {"Ex": 0, "Ey": 1, "Ez": 2}[real_component]
-        if x is not None:
-            data = bd.numpy(grid.E[x, :, :, comp_idx].real)
-        elif y is not None:
-            data = bd.numpy(grid.E[:, y, :, comp_idx].real).T
-        elif z is not None:
-            data = bd.numpy(grid.E[:, :, z, comp_idx].real)
-        grid_energy = data
-    else:
-        grid_energy = bd.sum(grid.E**2 + grid.H**2, -1)
-        if x is not None:
-            grid_energy = grid_energy[x, :, :]
-        elif y is not None:
-            grid_energy = grid_energy[:, y, :].T
-        elif z is not None:
-            grid_energy = grid_energy[:, :, z]
-
-    cmap_norm = None
-    if norm == "log":
-        cmap_norm = LogNorm(vmin=1e-4, vmax=grid_energy.max() + 1e-4)
-
-    plt.imshow(
-        abs(grid_energy),
-        cmap=cmap,
-        interpolation="sinc",
-        norm=cmap_norm
+    if bd.is_array(permeability) and len(permeability.shape) == 3:
+        permeability = permeability[:, :, :, None]
+    self.inverse_permeability = bd.ones((self.Nx, self.Ny, self.Nz, 3), dtype=material_dtype) / bd.array(
+        permeability, dtype=material_dtype
     )
-    plt.ylabel(xlabel)
-    plt.xlabel(ylabel)
-    plt.ylim(Nx, -1)
-    plt.xlim(-1, Ny)
-    plt.tight_layout()
 
-    if save:
-        plt.savefig(os.path.join(folder, f"file{str(index).zfill(4)}.png"))
-    if show:
-        plt.show()
+    # 初始化列表
+    self.time_steps_passed = 0
+    self.sources = []
+    self.boundaries = []
+    self.detectors = []
+    self.objects = []
+    self.folder = None
 
-    return plt.gcf()
+def _handle_distance(self, distance) -> int:
+    """轉換距離為網格點數"""
+    if not isinstance(distance, int):
+        return int(float(distance) / self.grid_spacing + 0.5)
+    return distance
+
+def _handle_time(self, time) -> int:
+    """轉換時間為時間步數"""
+    if not isinstance(time, int):
+        return int(float(time) / self.time_step + 0.5)
+    return time
+
+def _handle_tuple(self, shape):
+    """處理網格形狀tuple"""
+    if len(shape) != 3:
+        raise ValueError(f"invalid grid shape {shape}")
+    x, y, z = shape
+    x = self._handle_distance(x)
+    y = self._handle_distance(y)
+    z = self._handle_distance(z)
+    return x, y, z
+
+def _handle_slice(self, s: slice) -> slice:
+    """處理slice並轉換float值為int"""
+    start = s.start if not isinstance(s.start, float) else self._handle_distance(s.start)
+    stop = s.stop if not isinstance(s.stop, float) else self._handle_distance(s.stop)
+    step = s.step if not isinstance(s.step, float) else self._handle_distance(s.step)
+    return slice(start, stop, step)
+
+def _handle_single_key(self, key):
+    """處理單個索引key"""
+    try:
+        len(key)
+        return [self._handle_distance(k) for k in key]
+    except TypeError:
+        if isinstance(key, slice):
+            return self._handle_slice(key)
+        else:
+            return [self._handle_distance(key)]
+    return key
+
+@property
+def x(self) -> float:
+    return self.Nx * self.grid_spacing
+
+@property
+def y(self) -> float:
+    return self.Ny * self.grid_spacing
+
+@property
+def z(self) -> float:
+    return self.Nz * self.grid_spacing
+
+@property
+def shape(self):
+    return (self.Nx, self.Ny, self.Nz)
+
+@property
+def time_passed(self) -> float:
+    return self.time_steps_passed * self.time_step
+
+def step(self):
+    """執行單個FDTD步驟"""
+    self.update_E()
+    self.update_H()
+    self.time_steps_passed += 1
+
+def update_E(self):
+    """修正的電場更新函數"""
+    # 邊界條件：步驟1
+    for boundary in self.boundaries:
+        if hasattr(boundary, 'update_phi_E'):
+            boundary.update_phi_E()
+
+    # 計算curl(H)
+    curl = curl_H(self.H)
+    
+    # 確保數據類型一致性的場更新
+    if self.force_complex:
+        # 確保所有項都是複數
+        courant_complex = bd.array(self.courant_number, dtype=bd.complex)
+        self.E += courant_complex * self.inverse_permittivity * curl
+    else:
+        self.E += self.courant_number * self.inverse_permittivity * curl
+
+    # 更新物體
+    for obj in self.objects:
+        if hasattr(obj, 'update_E'):
+            obj.update_E(curl)
+
+    # 邊界條件：步驟2
+    for boundary in self.boundaries:
+        if hasattr(boundary, 'update_E'):
+            boundary.update_E()
+
+    # 添加源
+    for src in self.sources:
+        if hasattr(src, 'update_E'):
+            src.update_E()
+
+    # 檢測電場
+    for det in self.detectors:
+        if hasattr(det, 'detect_E'):
+            det.detect_E()
+
+def update_H(self):
+    """修正的磁場更新函數"""
+    # 邊界條件：步驟1
+    for boundary in self.boundaries:
+        if hasattr(boundary, 'update_phi_H'):
+            boundary.update_phi_H()
+
+    # 計算curl(E)
+    curl = curl_E(self.E)
+    
+    # 確保數據類型一致性的場更新
+    if self.force_complex:
+        # 確保所有項都是複數
+        courant_complex = bd.array(self.courant_number, dtype=bd.complex)
+        self.H -= courant_complex * self.inverse_permeability * curl
+    else:
+        self.H -= self.courant_number * self.inverse_permeability * curl
+
+    # 更新物體
+    for obj in self.objects:
+        if hasattr(obj, 'update_H'):
+            obj.update_H(curl)
+
+    # 邊界條件：步驟2
+    for boundary in self.boundaries:
+        if hasattr(boundary, 'update_H'):
+            boundary.update_H()
+
+    # 添加源
+    for src in self.sources:
+        if hasattr(src, 'update_H'):
+            src.update_H()
+
+    # 檢測磁場
+    for det in self.detectors:
+        if hasattr(det, 'detect_H'):
+            det.detect_H()
+
+def promote_dtypes_to_complex(self):
+    """強制轉換為複數類型"""
+    self.E = bd.array(self.E, dtype=bd.complex)
+    self.H = bd.array(self.H, dtype=bd.complex)
+    self.inverse_permittivity = bd.array(self.inverse_permittivity, dtype=bd.complex)
+    self.inverse_permeability = bd.array(self.inverse_permeability, dtype=bd.complex)
+
+    for boundary in self.boundaries:
+        if hasattr(boundary, 'promote_dtypes_to_complex'):
+            try:
+                boundary.promote_dtypes_to_complex()
+            except Exception as e:
+                print(f"Warning: Could not promote boundary {boundary} to complex: {e}")
+
+def reset(self):
+    """重置網格"""
+    self.H *= 0.0
+    self.E *= 0.0
+    self.time_steps_passed = 0
+
+def run(self, total_time, progress_bar: bool = True):
+    """運行FDTD模擬"""
+    if isinstance(total_time, float):
+        total_time = int(total_time / self.time_step)
+    
+    time_range = range(int(total_time))
+    if progress_bar:
+        time_range = tqdm(time_range)
+        
+    for _ in time_range:
+        self.step()
+
+def __setitem__(self, key, attr):
+    """設置網格元素"""
+    if not isinstance(key, tuple):
+        x, y, z = key, slice(None), slice(None)
+    elif len(key) == 1:
+        x, y, z = key[0], slice(None), slice(None)
+    elif len(key) == 2:
+        x, y, z = key[0], key[1], slice(None)
+    elif len(key) == 3:
+        x, y, z = key
+    else:
+        raise KeyError("maximum number of indices for the grid is 3")
+
+    if hasattr(attr, '_register_grid'):
+        attr._register_grid(
+            grid=self,
+            x=self._handle_single_key(x),
+            y=self._handle_single_key(y),
+            z=self._handle_single_key(z),
+        )
+
+def check_field_consistency(self):
+    """檢查場的數據類型一致性"""
+    print("=== 場數據類型檢查 ===")
+    print(f"E field dtype: {self.E.dtype}")
+    print(f"H field dtype: {self.H.dtype}")
+    print(f"inverse_permittivity dtype: {self.inverse_permittivity.dtype}")
+    print(f"inverse_permeability dtype: {self.inverse_permeability.dtype}")
+    print(f"courant_number type: {type(self.courant_number)}")
+    
+    # 檢查是否所有類型都一致
+    if self.force_complex:
+        types_ok = (
+            self.E.dtype == bd.complex and
+            self.H.dtype == bd.complex and
+            self.inverse_permittivity.dtype == bd.complex and
+            self.inverse_permeability.dtype == bd.complex
+        )
+        print(f"All complex types consistent: {types_ok}")
+    
+    return types_ok if self.force_complex else True
+
+def diagnose_numerical_issues(self):
+    """診斷數值問題"""
+    print("=== 數值穩定性診斷 ===")
+    
+    # 檢查場值範圍
+    E_max = bd.max(bd.abs(self.E))
+    H_max = bd.max(bd.abs(self.H))
+    print(f"Max |E|: {E_max}")
+    print(f"Max |H|: {H_max}")
+    
+    # 檢查是否有NaN或無限值
+    E_has_nan = bd.any(bd.isnan(self.E))
+    H_has_nan = bd.any(bd.isnan(self.H))
+    E_has_inf = bd.any(bd.isinf(self.E))
+    H_has_inf = bd.any(bd.isinf(self.H))
+    
+    print(f"E has NaN: {E_has_nan}")
+    print(f"H has NaN: {H_has_nan}")
+    print(f"E has Inf: {E_has_inf}")
+    print(f"H has Inf: {H_has_inf}")
+    
+    # 檢查Courant條件
+    print(f"Courant number: {self.courant_number}")
+    print(f"Max allowed Courant: {float(self.D) ** (-0.5)}")
+    
+    return not (E_has_nan or H_has_nan or E_has_inf or H_has_inf)
+
+def __repr__(self):
+    return (
+        f"{self.__class__.__name__}(shape=({self.Nx},{self.Ny},{self.Nz}), "
+        f"grid_spacing={self.grid_spacing:.2e}, courant_number={self.courant_number:.2f})"
+    )
+
+def __str__(self):
+    s = repr(self) + "\n"
+    if self.sources:
+        s += "\nsources:\n"
+        for src in self.sources:
+            s += str(src)
+    if self.detectors:
+        s += "\ndetectors:\n"
+        for det in self.detectors:
+            s += str(det)
+    if self.boundaries:
+        s += "\nboundaries:\n"
+        for bnd in self.boundaries:
+            s += str(bnd)
+    if self.objects:
+        s += "\nobjects:\n"
+        for obj in self.objects:
+            s += str(obj)
+    return s
+
+# 保留你原有的其他方法
+def save_simulation(self, sim_name=None):
+    """保存模擬設置"""
+    makedirs("fdtd_output", exist_ok=True)
+    full_sim_name = (
+        str(datetime.now().year) + "-" +
+        str(datetime.now().month) + "-" +
+        str(datetime.now().day) + "-" +
+        str(datetime.now().hour) + "-" +
+        str(datetime.now().minute) + "-" +
+        str(datetime.now().second)
+    )
+    if sim_name is not None:
+        full_sim_name = full_sim_name + " (" + sim_name + ")"
+    folder = "fdtd_output_" + full_sim_name
+    self.folder = os.path.abspath(path.join("fdtd_output", folder))
+    self.full_sim_name = full_sim_name
+    makedirs(self.folder, exist_ok=True)
+    return self.folder
+
+def save_data(self):
+    """保存檢測器數據"""
+    def _numpyfy(item):
+        if isinstance(item, list):
+            return [_numpyfy(el) for el in item]
+        elif bd.is_array(item):
+            return bd.numpy(item)
+        else:
+            return item
+            
+    if self.folder is None:
+        raise Exception("Save location not initialized.")
+    
+    dic = {}
+    for detector in self.detectors:
+        if hasattr(detector, 'detector_values'):
+            values = detector.detector_values()
+            dic[detector.name + " (E)"] = _numpyfy(values.get('E', []))
+            dic[detector.name + " (H)"] = _numpyfy(values.get('H', []))
+            if 'S' in values:
+                dic[detector.name + " (S)"] = _numpyfy(values['S'])
+    
+    savez(path.join(self.folder, "detector_readings"), **dic)
+```
