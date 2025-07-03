@@ -128,16 +128,24 @@ class LineDetector:
         self.detect_S()
 
     def detect_S(self):
-        """ 計算截面當下的 Poynting flux 並整合後存於 self.S"""
+        """ 修正的坡印廷向量計算 """
         # 取得 E 和 H 的場值，形狀為 (N_line, 3)
         E = bd.array(self.grid.E[self.x, self.y, self.z])
         H = bd.array(self.grid.H[self.x, self.y, self.z])
 
-        # 計算逐點 Poynting 向量：S = Re(E x H*)
-        S_vec = bd.real(bd.cross(E, bd.conj(H)))
+        # 修正1: 添加正確的係數 1/2
+        # 計算逐點 Poynting 向量：S = (1/2) * Re(E x H*)
+        S_vec = 0.5 * bd.real(bd.cross(E, bd.conj(H)))
+
+        # 修正2: 使用bd.sum而不是.sum()
+        # 針對傳播方向整合為標量通量
+        if len(S_vec.shape) > 1 and S_vec.shape[1] > self.direction_idx:
+            S_scalar = bd.sum(S_vec[:, self.direction_idx])
+        else:
+            # 如果維度不對，使用總和
+            S_scalar = bd.sum(S_vec)
 
         # 針對傳播方向(假設為 z 方向，index=2)整合為標量通量
-        S_scalar = S_vec[:, self.direction_idx].sum()
         if self.flip_sign:
             S_scalar = -S_scalar
 
@@ -156,34 +164,35 @@ class LineDetector:
         return s
 
     def detector_values(self):
-        """ outputs what detector detects """
-        # return {"E": self.E, 
-        #         "Ex": self.E[..., 0],
-        #         "Ey": self.E[..., 1],
-        #         "Ez": self.E[..., 2],
-        #         "H": self.H,
-        #         "Hx": self.H[..., 0],
-        #         "Hy": self.H[..., 1],
-        #         "Hz": self.H[..., 2],}
+        """ 修正的detector_values方法 """
         E_array = bd.array(self.E)  # 將 self.E 轉換為陣列
         H_array = bd.array(self.H)  # 將 self.H 轉換為陣列
-        S_array = bd.array(self.S)  # 將 self.S 轉換為陣列
+        S_array = bd.array(self.S)  # 將 self.S 轉換為陣列 - 這是標量時間序列
 
-        return {
+        result = {
             "E": E_array,
-            "Ex": E_array[..., 0],
-            "Ey": E_array[..., 1],
-            "Ez": E_array[..., 2],
             "H": H_array,
-            "Hx": H_array[..., 0],
-            "Hy": H_array[..., 1],
-            "Hz": H_array[..., 2],
-            "Sx": S_array[..., 0],
-            "Sy": S_array[..., 1],
-            "Sz": S_array[..., 2],
-            "S": S_array
+            "S": S_array  # 標量功率流時間序列
         }
+    
+        # 只有在陣列有足夠維度時才添加分量
+        if len(E_array.shape) >= 2 and E_array.shape[-1] >= 3:
+            result.update({
+                "Ex": E_array[..., 0],
+                "Ey": E_array[..., 1],
+                "Ez": E_array[..., 2],
+            })
+            
+        if len(H_array.shape) >= 2 and H_array.shape[-1] >= 3:
+            result.update({
+                "Hx": H_array[..., 0],
+                "Hy": H_array[..., 1],
+                "Hz": H_array[..., 2],
+            })
+        # 移除錯誤的 Sx, Sy, Sz，因為 S_array 是標量
+        # 如果需要向量坡印廷數據，需要在 detect_S() 中額外儲存
 
+        return result
 
 # is the "detector" paradigm necessary? Can we just flag a segment of the base mesh to be
 # stored per timestep?

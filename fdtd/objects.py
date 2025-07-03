@@ -34,7 +34,12 @@ class Object:
     #     self.name = name
     #     self.permittivity = bd.array(permittivity)
 
-    def __init__(self, permittivity: Tensorlike = None, n: float = None, k: float = None, name: str = None):
+    def __init__(
+            self, 
+            permittivity: Tensorlike = None, 
+            n: float = None, 
+            k: float = None, 
+            name: str = None):
         """
         Args:
             permittivity: relative permittivity tensor (can be complex)

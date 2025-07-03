@@ -24,7 +24,7 @@ source_z = fdtd.to_grid(fdtd.um(0.5), grid_spacing)
 det_z_T = fdtd.to_grid(fdtd.um(5), grid_spacing)
 det_z_R = fdtd.to_grid(fdtd.um(1), grid_spacing)
 start_z = fdtd.to_grid(fdtd.um(2), grid_spacing)
-end_z = fdtd.to_grid(fdtd.um(2.5), grid_spacing)
+end_z = fdtd.to_grid(fdtd.um(3), grid_spacing)
 # === 儲存資料夾 ===
 
 # ==== make_grid 函式封裝 ====

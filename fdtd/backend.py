@@ -143,6 +143,25 @@ class NumpyBackend(Backend):
     broadcast_to = staticmethod(numpy.broadcast_to)
     """ broadcast array into shape """
 
+    real = staticmethod(numpy.real)
+    """ get the real part of an array """
+
+    imag = staticmethod(numpy.imag)
+    """ get the imaginary part of an array """
+
+    abs = staticmethod(numpy.abs)
+    """ get the absolute value of an array """
+
+    isnan = staticmethod(numpy.isnan)
+    """ check if an array contains NaN values """
+
+    isinf = staticmethod(numpy.isinf)
+    """ check if an array contains Inf values """
+
+    any = staticmethod(numpy.any)
+
+    all = staticmethod(numpy.all)
+
     @staticmethod
     def bmm(arr1, arr2):
         """batch matrix multiply two arrays"""
@@ -173,9 +192,6 @@ class NumpyBackend(Backend):
     """ create a linearly spaced array between two points """
 
     arange = _replace_float(numpy.arange)
-    """ create a range of values """
-
-    real = _replace_float(numpy.real)
     """ create a range of values """
 
     where = _replace_float(numpy.where)
@@ -265,6 +281,25 @@ if TORCH_AVAILABLE:
         stack = staticmethod(torch.stack)
         """ stack multiple arrays """
 
+        real = staticmethod(torch.real)
+        """ get the real part of an array """
+
+        imag = staticmethod(torch.imag)
+        """ get the imaginary part of an array """
+
+        abs = staticmethod(torch.abs)
+        """ get the absolute value of an array """
+
+        isnan = staticmethod(torch.isnan)
+        """ check if an array contains NaN values """
+
+        isinf = staticmethod(torch.isinf)
+        """ check if an array contains Inf values """
+
+        any = staticmethod(torch.any)
+
+        all = staticmethod(torch.all)
+
         @staticmethod
         def transpose(arr, axes=None):
             """transpose array by flipping two dimensions"""
@@ -316,9 +351,6 @@ if TORCH_AVAILABLE:
             return torch.arange(start, stop + 0.5 * float(endpoint) * delta, delta)
 
         arange = staticmethod(torch.arange)
-        """ create a range of values """
-        
-        real = staticmethod(torch.real)
         """ create a range of values """
         
         where = staticmethod(torch.where)

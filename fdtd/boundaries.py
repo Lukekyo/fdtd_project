@@ -3,8 +3,14 @@
 Available Boundaries:
 
  - PeriodicBoundary
+ - BlochBoundary
  - PML
 
+ - Enhanced error handling and validation
+ - Better code organization and documentation
+ - Improved type hints and parameter validation
+ - More efficient array operations
+ - Cleaner separation of concerns
 """
 ## Imports
 
