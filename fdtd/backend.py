@@ -125,6 +125,9 @@ class NumpyBackend(Backend):
     max = staticmethod(numpy.max)
     """ max element in array """
 
+    min = staticmethod(numpy.min)
+    """ min element in array """
+
     stack = staticmethod(numpy.stack)
     """ stack multiple arrays """
 
@@ -157,6 +160,11 @@ class NumpyBackend(Backend):
 
     isinf = staticmethod(numpy.isinf)
     """ check if an array contains Inf values """
+
+    mean = staticmethod(numpy.mean)
+    """ check if an array contains Inf values """
+
+    std = staticmethod(numpy.std)
 
     any = staticmethod(numpy.any)
 
@@ -211,7 +219,9 @@ class NumpyBackend(Backend):
 
     divide = staticmethod(numpy.divide)
 
+    deg2rad = staticmethod(numpy.deg2rad)
     
+    rad2deg = staticmethod(numpy.rad2deg)
 
     # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     # beware to future people:
@@ -278,6 +288,9 @@ if TORCH_AVAILABLE:
         max = staticmethod(torch.max)
         """ max element in array """
 
+        min = staticmethod(torch.min)
+        """ max element in array """
+
         stack = staticmethod(torch.stack)
         """ stack multiple arrays """
 
@@ -299,6 +312,10 @@ if TORCH_AVAILABLE:
         any = staticmethod(torch.any)
 
         all = staticmethod(torch.all)
+
+        mean = staticmethod(torch.mean)
+
+        std = staticmethod(torch.std)
 
         @staticmethod
         def transpose(arr, axes=None):
@@ -367,9 +384,14 @@ if TORCH_AVAILABLE:
         exp = staticmethod(torch.exp)
 
         conj = staticmethod(torch.conj)
+
+        deg2rad = staticmethod(torch.deg2rad)
+        
+        rad2deg = staticmethod(torch.rad2deg)
         # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
         # The same warning applies here.
         # <3 <3 <3 <3
+
 
         def numpy(self, arr):
             """convert the array to numpy array"""

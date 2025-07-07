@@ -116,8 +116,7 @@ class Object:
             self.inverse_permittivity[:, :, -1, 2] = self.grid.inverse_permittivity[
                 self.x, self.y, -1, 2
             ]
-
-        self.grid.inverse_permittivity[self.x, self.y, self.z] = 0
+        self.grid.inverse_permittivity[self.x, self.y, self.z, :] = self.inverse_permittivity
 
     def _handle_slice(self, s: ListOrSlice, max_index: int = None) -> slice:
         if isinstance(s, list):

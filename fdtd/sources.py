@@ -679,7 +679,6 @@ class ComplexLineSource:
         s += f"        @ x={x}, y={y}, z={z}\n"
         return s
 
-# DirectionalComplexPlaneWave2D class
 class ComplexPlaneWave:
     """A 2D plane wave source (Ez polarization)"""
 
@@ -704,20 +703,25 @@ class ComplexPlaneWave:
         self.omega = 2 * bd.pi * bd.c0 / wavelength
         self.amplitude = bd.complex(amplitude)
         self.phase_shift = phase_shift
-        self.theta = np.deg2rad(theta_deg)
+        self.theta = bd.deg2rad(theta_deg)
         self.name = name
         self.pulse = pulse
         self.cycle = cycle
         self.hanning_dt = hanning_dt
         self.polarization_axis = polarization_axis.lower()
         self.n = medium_n if medium_n is not None else 1.0
-        self.eta = eta0/self.n  # calculate the impedance of the medium
+        
+        # === 新增：初始化源類型屬性 ===
+        self.source_type = None  # 將在 _register_grid 中設定
 
     def _register_grid(self, grid: Grid, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice):
         self.grid = grid
         self.grid.sources.append(self)
         if self.name is not None:
             setattr(grid, self.name, self)
+
+        # === 新增：在處理切片之前分析源類型 ===
+        self._analyze_source_geometry(x, y, z, grid)
 
         self.x, self.y, self.z = self._handle_slices(x, y, z)
         if self.hanning_dt is None:
@@ -734,6 +738,51 @@ class ComplexPlaneWave:
 
         self.pol_index = {"x": 0, "y": 1, "z": 2}[self.polarization_axis]
 
+    def _analyze_source_geometry(self, x, y, z, grid):
+        """分析源的幾何配置並設定 source_type"""
+        
+        def get_dimension_info(coord, max_val):
+            """獲取坐標維度資訊"""
+            if isinstance(coord, slice):
+                start = coord.start or 0
+                stop = coord.stop or max_val
+                return stop - start
+            elif isinstance(coord, list):
+                return len(coord)
+            else:  # 單個數值
+                return 1
+        
+        # 分析各維度
+        x_len = get_dimension_info(x, grid.Nx)
+        y_len = get_dimension_info(y, grid.Ny)
+        z_len = get_dimension_info(z, grid.Nz)
+        
+        print(f"🔍 源幾何分析: X={x_len}, Y={y_len}, Z={z_len}")
+        
+        # 確定源類型
+        dimensions = [x_len, y_len, z_len]
+        non_unit_dims = sum(1 for d in dimensions if d > 1)
+        
+        if non_unit_dims == 0:
+            self.source_type = "point"
+        elif non_unit_dims == 1:
+            if x_len > 1:
+                self.source_type = "x_line"
+            elif y_len > 1:
+                self.source_type = "y_line"
+            else:
+                self.source_type = "z_line"
+        elif non_unit_dims == 2:
+            if x_len > 1 and y_len > 1:
+                self.source_type = "xy_plane"
+            elif x_len > 1 and z_len > 1:
+                self.source_type = "xz_plane"
+            else:
+                self.source_type = "yz_plane"
+        else:
+            self.source_type = "volume"
+        
+        print(f"   📍 源類型: {self.source_type}")
 
     def _handle_slices(
         self, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice
@@ -805,7 +854,6 @@ class ComplexPlaneWave:
         return x, y, z
 
     def update_E(self):
-        # t = self.grid.time_steps_passed * self.hanning_dt
         t = self.grid.time_steps_passed * self.grid.time_step
 
         if self.pulse:
@@ -818,9 +866,23 @@ class ComplexPlaneWave:
             phi_sp = self.spatial_phase[(xi, zi)]
             phase = self.omega * t + self.phase_shift + phi_sp
             # 加入阻抗
-            val = (self.amplitude / self.eta) * bd.exp(1j * phase) * env
+            val = self.amplitude * bd.exp(1j * phase) * env
             self.grid.E[xi, 0, zi, self.pol_index] += val
 
+    def get_source_power(self, grid_spacing):
+        """最簡版源功率計算"""
+        Z0 = 377.0
+        Z_medium = Z0 / self.n
+        E0 = abs(self.amplitude)
+        
+        source_length = len(getattr(self, 'x', [1])) * grid_spacing
+        power_density = 0.5 * E0**2 / Z_medium
+        P_incident = power_density * source_length
+        
+        print(f"🔋 源功率: {P_incident:.6e} W/m (長度: {source_length*1e6:.2f}μm)")
+        return P_incident
+    
+    
     def update_H(self):
         pass
 
@@ -833,12 +895,14 @@ class ComplexPlaneWave:
 
     def __str__(self):
         s = "    " + repr(self) + "\n"
-        x = f"[{self.x[0]}, ... , {self.x[-1]}]"
-        y = f"[{self.y[0]}, ... , {self.y[-1]}]"
-        z = f"[{self.z[0]}, ... , {self.z[-1]}]"
-        s += f"        @ x={x}, y={y}, z={z}\n"
+        if hasattr(self, 'x') and hasattr(self, 'y') and hasattr(self, 'z'):
+            x = f"[{self.x[0]}, ... , {self.x[-1]}]" if len(self.x) > 1 else f"[{self.x[0]}]"
+            y = f"[{self.y[0]}, ... , {self.y[-1]}]" if len(self.y) > 1 else f"[{self.y[0]}]"
+            z = f"[{self.z[0]}, ... , {self.z[-1]}]" if len(self.z) > 1 else f"[{self.z[0]}]"
+            s += f"        @ x={x}, y={y}, z={z}\n"
+            if hasattr(self, 'source_type'):
+                s += f"        type: {self.source_type}\n"
         return s
-    
 
 class SoftArbitraryPointSource:
     r"""

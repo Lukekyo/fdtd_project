@@ -133,24 +133,82 @@ class LineDetector:
         E = bd.array(self.grid.E[self.x, self.y, self.z])
         H = bd.array(self.grid.H[self.x, self.y, self.z])
 
-        # 修正1: 添加正確的係數 1/2
-        # 計算逐點 Poynting 向量：S = (1/2) * Re(E x H*)
-        S_vec = 0.5 * bd.real(bd.cross(E, bd.conj(H)))
-
-        # 修正2: 使用bd.sum而不是.sum()
-        # 針對傳播方向整合為標量通量
-        if len(S_vec.shape) > 1 and S_vec.shape[1] > self.direction_idx:
-            S_scalar = bd.sum(S_vec[:, self.direction_idx])
+        # 物理常數
+        mu0 = 4e-7 * bd.pi  # 磁導率 [H/m]
+        
+        # 計算逐點 Poynting 向量
+        if len(E.shape) > 1 and E.shape[1] == 3:
+            # 完整的向量叉積
+            S_vec = bd.real(bd.cross(E, bd.conj(H))) / mu0  # [W/m²]
+            
+            # 提取z方向分量（傳播方向）
+            S_z_array = S_vec[:, self.direction_idx]  # 通常direction_idx=2
         else:
-            # 如果維度不對，使用總和
-            S_scalar = bd.sum(S_vec)
-
-        # 針對傳播方向(假設為 z 方向，index=2)整合為標量通量
+            # 如果維度不對，需要調試
+            print(f"WARNING: E shape = {E.shape}, H shape = {H.shape}")
+            S_z_array = bd.zeros(len(self.x))
+    
+        # 【關鍵修正】：正確的空間積分
+        grid_spacing = self.grid.grid_spacing
+        
+        # 對於2D模擬，每個格點代表grid_spacing的長度
+        # 總功率流 = Σ(功率密度) × grid_spacing
+        S_total = bd.sum(S_z_array) * grid_spacing  # [W/m]
+        
+        # 處理反射檢測器的符號
         if self.flip_sign:
-            S_scalar = -S_scalar
+            S_total  = -S_total 
+        
+        # print(f"DEBUG detect_S ({self.name}):")
+        # print(f"   E real: [{bd.max(bd.real(E)):.2e}] V/m")
+        # print(f"   H real: [{bd.max(bd.real(H)):.2e}] A/m")
+        # print(f"   S_z range: [{bd.min(S_z_array):.2e}, {bd.max(S_z_array):.2e}] W/m²")
+        # print(f"   格點數: {len(S_z_array)}")
+        # print(f"   grid_spacing: {grid_spacing:.2e} m")
+        # print(f"   S_total: {S_total:.6e} W/m")
+        
+        self.S.append(S_total)
 
-        # 存入時序列表
-        self.S.append(S_scalar)
+    def get_power_flow(self, steady_steps=20):
+        """
+        從Poynting向量時間序列計算功率流（修正版）
+        
+        Args:
+            steady_steps: 穩態平均的步數
+        
+        Returns:
+            float: 功率流 [W/m] (2D) 或 [W] (3D)
+        """
+        if len(self.S) == 0:
+            print(f"⚠️ 檢測器 {self.name} 沒有數據")
+            return None
+        
+        # 確定穩態範圍
+        total_steps = len(self.S)
+        if total_steps < steady_steps:
+            steady_steps = total_steps
+            print(f"⚠️ 檢測器 {self.name}: 總步數({total_steps}) < 穩態步數，使用全部數據")
+        
+        # 取最後幾步的Poynting向量進行平均
+        steady_data = self.S[-steady_steps:]
+        
+        print(f"📊 檢測器 '{self.name}' 功率流分析:")
+        print(f"   分析步數: {steady_steps}")
+        print(f"   原始數據: {[f'{x:.2e}' for x in steady_data[-5:]]}")  # 顯示最後5個值
+    
+        # 計算平均功率流
+        # 注意：detector.S 現在已經是正確單位的功率流了
+        if self.flip_sign:
+            # 反射檢測器：由於已經在detect_S中處理符號，這裡取絕對值
+            power_flow = bd.mean(bd.abs(steady_data))
+        else:
+            # 穿透檢測器：取實部
+            power_flow = bd.mean(bd.real(steady_data))
+        
+        print(f"   平均功率流: {power_flow:.6e} W/m")
+        
+        return power_flow
+
 
     def __repr__(self):
         return f"{self.__class__.__name__}(name={repr(self.name)})"

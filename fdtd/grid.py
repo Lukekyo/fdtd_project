@@ -23,7 +23,6 @@ from .typing_ import Tuple, Number, Tensorlike
 
 # relative
 from .backend import backend as bd
-from . import constants as const
 
 ## Functions
 def curl_E(E: Tensorlike) -> Tensorlike:
@@ -135,7 +134,7 @@ class Grid:
             self.courant_number = float(courant_number)
 
         # timestep of the simulation
-        self.time_step = self.courant_number * self.grid_spacing / const.c
+        self.time_step = self.courant_number * self.grid_spacing / bd.c0
 
         # Choose dtype based on force_complex
         field_dtype = bd.complex if force_complex else bd.float
@@ -290,14 +289,13 @@ class Grid:
             boundary.update_phi_E()
         
         curl = curl_H(self.H)
-
         # Ensure dtype consistency for field updates
         if self.force_complex:
-            courant_complex = bd.array(self.courant_number, dtype=bd.complex)
+            courant_complex = bd.array(self.courant_number / self.grid_spacing, dtype=bd.complex)
             self.E += courant_complex * self.inverse_permittivity * curl
         else:
-            self.E += self.courant_number * self.inverse_permittivity * curl
-
+            self.E += self.courant_number / self.grid_spacing * self.inverse_permittivity * curl
+    
         # self.E += self.courant_number * self.inverse_permittivity * curl
 
         # update objects
@@ -324,13 +322,15 @@ class Grid:
             boundary.update_phi_H()
 
         curl = curl_E(self.E)
+        curl_h = curl_H(self.H)
+        self.E += (self.courant_number / self.grid_spacing) * self.inverse_permittivity * curl_h
 
         # Ensure dtype consistency for field updates
         if self.force_complex:
-            courant_complex = bd.array(self.courant_number, dtype=bd.complex)
+            courant_complex = bd.array(self.courant_number / self.grid_spacing, dtype=bd.complex)
             self.H -= courant_complex * self.inverse_permeability * curl
         else:
-            self.H -= self.courant_number * self.inverse_permeability * curl
+            self.H -= self.courant_number / self.grid_spacing * self.inverse_permeability * curl
         # self.H -= self.courant_number * self.inverse_permeability * curl
 
         # update objects

@@ -12,6 +12,13 @@ from .backend import backend
 from .backend import set_backend
 from .fourier import FrequencyRoutines
 from .visualization import dB_map_2D, plot_detection
-from .fdtd_helper import um, nm, to_grid, from_grid, reference_run
-from .visualize_domain import plot_simulation_domain    
-    
+from .fdtd_helper import (
+    um, nm, to_grid, from_grid,
+    debug_power_calculation,
+    test_source_method,
+    calculate_simple_TR_corrected,
+    comprehensive_magnetic_field_diagnosis_fixed,
+    comprehensive_parameter_diagnosis_fixed,
+    comprehensive_impedance_error_analysis
+    )
+from .visualize_domain import plot_simulation_domain
