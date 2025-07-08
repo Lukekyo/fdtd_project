@@ -170,6 +170,12 @@ class NumpyBackend(Backend):
 
     all = staticmethod(numpy.all)
 
+    rad2deg = staticmethod(numpy.rad2deg)
+    """ convert radians to degrees """
+
+    deg2rad = staticmethod(numpy.deg2rad)
+    """ convert degrees to radians """
+
     @staticmethod
     def bmm(arr1, arr2):
         """batch matrix multiply two arrays"""
@@ -312,6 +318,10 @@ if TORCH_AVAILABLE:
         any = staticmethod(torch.any)
 
         all = staticmethod(torch.all)
+        
+        rad2deg = staticmethod(torch.rad2deg)
+        
+        deg2rad = staticmethod(torch.deg2rad)
 
         mean = staticmethod(torch.mean)
 

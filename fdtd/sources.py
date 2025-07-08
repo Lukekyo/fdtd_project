@@ -523,7 +523,7 @@ class ComplexLineSource:
         self.period = period
         self.wavelength = wavelength
         self.amplitude = bd.complex(amplitude)
-        self.omega = 2 * np.pi * bd.c0 / wavelength
+        self.omega = 2 * bd.pi * bd.c0 / wavelength
         self.phase_shift = phase_shift
         self.name = name
         self.pulse = pulse
@@ -644,19 +644,19 @@ class ComplexLineSource:
         return x, y, z
 
     def update_E(self):
-        q = self.grid.time_steps_passed * self.grid.time_step  # convert to time
+        t = self.grid.time_steps_passed * self.grid.time_step  # convert to time
 
         if self.pulse:
-            t1 = int(2 * pi / (self.frequency * self.hanning_dt / self.cycle))
-            if q < t1:
-                env = hanning(self.frequency, q * self.hanning_dt, self.cycle)
-                vect = self.profile * bd.exp(1j * (self.omega * q + self.phase_shift)) * env
+            t1 = int(2 * bd.pi / (self.frequency * self.hanning_dt / self.cycle))
+            if t < t1:
+                env = hanning(self.frequency, t, self.cycle)
+                complex_vect = self.profile * bd.exp(1j * (self.omega * t + self.phase_shift)) * env
             else:
-                vect = self.profile * 0
+                complex_vect = self.profile * 0
         else:
-            vect = self.profile * bd.exp(1j * (self.omega * q + self.phase_shift))
-            # vect = bd.real(self.profile * bd.exp(1j * (self.omega * q + self.phase_shift)))
-
+            complex_vect = self.profile * bd.exp(1j * (self.omega * t + self.phase_shift))
+            vect = bd.real(complex_vect)  # take the real part for the electric field
+            
         for x, y, z, value in zip(self.x, self.y, self.z, vect):
             self.grid.E[x, y, z, 2] += value
 
@@ -729,10 +729,10 @@ class ComplexPlaneWave:
 
         # === 空間相位設定 計算 kx, kz ===
         k0 = 2*bd.pi / self.wavelength
-        kx = k0 * bd.sin(self.theta)
-        kz = k0 * bd.cos(self.theta)
+        kx = k0 * bd.sin(self.theta) * self.n
+        kz = k0 * bd.cos(self.theta) * self.n
         self.spatial_phase = {
-            (xi, zi): - (kx * xi * grid.grid_spacing + kz * zi * grid.grid_spacing)
+            (xi, zi): kx * xi * grid.grid_spacing + kz * zi * grid.grid_spacing
             for xi, zi in zip(self.x, self.z)
         }
 
@@ -857,16 +857,25 @@ class ComplexPlaneWave:
         t = self.grid.time_steps_passed * self.grid.time_step
 
         if self.pulse:
-            t1 = int(2*np.pi / (1/self.period) / (self.hanning_dt/self.cycle))
-            env = hanning(1/self.period, t, self.cycle) if t < t1 else 0
+            t1 = 2 * bd.pi * self.cycle / (2 * bd.pi / self.period)
+            if t < t1:
+                env = hanning(1/self.period, t, self.cycle)
+            else:
+                env = 0
         else:
             env = 1
 
         for xi, zi in zip(self.x, self.z):
             phi_sp = self.spatial_phase[(xi, zi)]
             phase = self.omega * t + self.phase_shift + phi_sp
+<<<<<<< HEAD
             # 加入阻抗
             val = self.amplitude * bd.exp(1j * phase) * env
+=======
+
+            complex_val = self.amplitude * bd.exp(1j * phase) * env
+            val = bd.real(complex_val)
+>>>>>>> b29a16d (update from home)
             self.grid.E[xi, 0, zi, self.pol_index] += val
 
     def get_source_power(self, grid_spacing):
@@ -884,8 +893,40 @@ class ComplexPlaneWave:
     
     
     def update_H(self):
-        pass
+        """更新對應的磁場分量"""
+        t = self.grid.time_steps_passed * self.grid.time_step
 
+        if self.pulse:
+            t1 = 2 * bd.pi * self.cycle / (2 * bd.pi / self.period)
+            if t < t1:
+                env = hanning(1/self.period, t, self.cycle)
+            else:
+                env = 0
+        else:
+            env = 1
+        
+        # 根據傳播方向和極化確定磁場分量
+        # 假設是 TE 模式 (Ez, Hx, Hy)
+
+        if self.polarization_axis == "z":
+            # Ez 極化，磁場在 x-y 平面
+            h_index = 1 # Hy 分量 (假設傳播在 x-z 平面)
+        elif self.polarization_axis == "y":
+            h_index = 2
+        else:
+            h_index = 1
+        
+        for xi, zi in zip(self.x, self.z):
+            phi_sp = self.spatial_phase[(xi, zi)]
+            # 磁場與電場同相 (平面波)
+            
+            phase = self.omega * t + self.phase_shift + phi_sp
+            
+            # 磁場振幅 = 電場振幅 / 阻抗
+            complex_val = (self.amplitude / self.eta) * bd.exp(1j * phase) * env
+            val = bd.real(complex_val)
+            self.grid.H[xi, 0, zi, h_index] += val
+        
     def __repr__(self):
         return (
             f"{self.__class__.__name__}(period={self.period}, "

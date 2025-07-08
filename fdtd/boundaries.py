@@ -232,6 +232,9 @@ class BlochBoundary(Boundary):
         self.length = length
         self.phase = bd.exp(1j * k_component * length)
 
+        # 用於偵錯
+        print(f"Bloch boundary: k={k_component:.6f}, L={length:.6f}, phase={self.phase}")
+
     def _register_grid(
             self, grid: Grid, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice
     ):
@@ -240,6 +243,12 @@ class BlochBoundary(Boundary):
         # 強制轉 complex，避免 ComplexWarning
         grid.E = bd.array(grid.E, dtype=bd.complex)
         grid.H = bd.array(grid.H, dtype=bd.complex)
+
+        # 材料參數也需要轉換
+        if hasattr(grid, 'inverse_permittivity'):
+            grid.inverse_permittivity = bd.array(grid.inverse_permittivity, dtype=bd.complex)
+        if hasattr(grid, 'inverse_permeability'):
+            grid.inverse_permeability = bd.array(grid.inverse_permeability, dtype=bd.complex)
 
         if self.x == 0 or self.x == -1:
             self.__class__ = _BlochBoundaryX # subclass of BlochBoundary
