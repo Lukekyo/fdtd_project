@@ -291,10 +291,10 @@ class Grid:
         curl = curl_H(self.H)
         # Ensure dtype consistency for field updates
         if self.force_complex:
-            courant_complex = bd.array(self.courant_number / self.grid_spacing, dtype=bd.complex)
+            courant_complex = bd.array(self.courant_number, dtype=bd.complex)
             self.E += courant_complex * self.inverse_permittivity * curl
         else:
-            self.E += self.courant_number / self.grid_spacing * self.inverse_permittivity * curl
+            self.E += self.courant_number * self.inverse_permittivity * curl
     
         # self.E += self.courant_number * self.inverse_permittivity * curl
 
@@ -322,16 +322,14 @@ class Grid:
             boundary.update_phi_H()
 
         curl = curl_E(self.E)
-        curl_h = curl_H(self.H)
-        self.E += (self.courant_number / self.grid_spacing) * self.inverse_permittivity * curl_h
-
-        # Ensure dtype consistency for field updates
+        
+        # ✅ 正確版本 - 兩個分支都不應該有 / self.grid_spacing
         if self.force_complex:
-            courant_complex = bd.array(self.courant_number / self.grid_spacing, dtype=bd.complex)
+            courant_complex = bd.array(self.courant_number, dtype=bd.complex)
             self.H -= courant_complex * self.inverse_permeability * curl
         else:
-            self.H -= self.courant_number / self.grid_spacing * self.inverse_permeability * curl
-        # self.H -= self.courant_number * self.inverse_permeability * curl
+            # ❌ 檢查這行是否還有 / self.grid_spacing
+            self.H -= self.courant_number * self.inverse_permeability * curl  # 移除 / self.grid_spacing
 
         # update objects
         for obj in self.objects:
