@@ -511,7 +511,7 @@ class PML(Boundary):
             this method is called *after* the electric field is updated
         """
         self.grid.E[self.loc] += (
-            self.grid.courant_number
+            self.grid.courant_number / self.grid_spacing
             * self.grid.inverse_permittivity[self.loc]
             * self.phi_E
         )
@@ -523,7 +523,7 @@ class PML(Boundary):
             this method is called *after* the magnetic field is updated
         """
         self.grid.H[self.loc] -= (
-            self.grid.courant_number
+            self.grid.courant_number / self.grid_spacing
             * self.grid.inverse_permeability[self.loc]
             * self.phi_H
         )

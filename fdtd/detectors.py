@@ -133,7 +133,6 @@ class LineDetector:
         E = bd.array(self.grid.E[self.x, self.y, self.z])
         H = bd.array(self.grid.H[self.x, self.y, self.z])
 
-<<<<<<< HEAD
         # 物理常數
         mu0 = 4e-7 * bd.pi  # 磁導率 [H/m]
         
@@ -144,16 +143,6 @@ class LineDetector:
             
             # 提取z方向分量（傳播方向）
             S_z_array = S_vec[:, self.direction_idx]  # 通常direction_idx=2
-=======
-        # 修正1: 添加正確的係數 1/2
-        # 計算逐點 Poynting 向量：S = (1/2) * Re(E x H*)
-        S_vec = 0.5 * bd.real(bd.cross(E, H))
-
-        # 修正2: 使用bd.sum而不是.sum()
-        # 針對傳播方向整合為標量通量
-        if len(S_vec.shape) > 1 and S_vec.shape[1] > self.direction_idx:
-            S_scalar = bd.sum(S_vec[:, self.direction_idx])
->>>>>>> b29a16d (update from home)
         else:
             # 如果維度不對，需要調試
             print(f"WARNING: E shape = {E.shape}, H shape = {H.shape}")
