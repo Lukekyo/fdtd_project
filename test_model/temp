@@ -1,6 +1,6 @@
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(**file**), ‘..’)))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import time
 import numpy as np
 import matplotlib.pyplot as plt
@@ -10,7 +10,7 @@ import fdtd
 
 # ==== 模擬參數 ====
 
-fdtd.set_backend(“numpy”)
+fdtd.set_backend("numpy")
 wavelength = fdtd.nm(1550)
 grid_spacing = fdtd.nm(20)
 x_span, z_span = fdtd.um(2), fdtd.um(6)
@@ -31,224 +31,190 @@ start_z = fdtd.to_grid(fdtd.um(2), grid_spacing)     # 結構開始
 end_z = fdtd.to_grid(fdtd.um(3), grid_spacing)       # 結構結束
 det_z_T = fdtd.to_grid(fdtd.um(4.5), grid_spacing)  # 結構後面
 
-print(f”📍 位置設定:”)
-print(f”   Source: z = {source_z} ({source_z * grid_spacing * 1e6:.2f} μm)”)
-print(f”   反射探測器: z = {det_z_R} ({det_z_R * grid_spacing * 1e6:.2f} μm)”)
-print(f”   結構: z = {start_z}-{end_z} ({start_z * grid_spacing * 1e6:.2f}-{end_z * grid_spacing * 1e6:.2f} μm)”)
-print(f”   穿透探測器: z = {det_z_T} ({det_z_T * grid_spacing * 1e6:.2f} μm)”)
+print(f"📍 位置設定:")
+print(f"   Source: z = {source_z} ({source_z * grid_spacing * 1e6:.2f} μm)")
+print(f"   反射探測器: z = {det_z_R} ({det_z_R * grid_spacing * 1e6:.2f} μm)")
+print(f"   結構: z = {start_z}-{end_z} ({start_z * grid_spacing * 1e6:.2f}-{end_z * grid_spacing * 1e6:.2f} μm)")
+print(f"   穿透探測器: z = {det_z_T} ({det_z_T * grid_spacing * 1e6:.2f} μm)")
 
 # ==== make_grid 函式封裝 ====
 
 def make_grid(with_structure=True):
-“”“創建FDTD網格”””
-grid = fdtd.Grid(
-shape=(Nx, 1, Nz),
-grid_spacing=grid_spacing,
-permittivity=1.0,
-force_complex=True  # 🔧 確保複數支援
-)
+    """創建FDTD網格"""
+    grid = fdtd.Grid(
+    shape=(Nx, 1, Nz),
+    grid_spacing=grid_spacing,
+    permittivity=1.0,
+    force_complex=True  # 🔧 確保複數支援
+    )
 
-```
-# 邊界條件
-grid[0, :, :] = fdtd.BlochBoundary(k_component=kx, length=Lx)
-grid[:, :, :pml_thickness] = fdtd.PML(name="pml_low")
-grid[:, :, -pml_thickness:] = fdtd.PML(name="pml_high")
+    # 邊界條件
+    grid[0, :, :] = fdtd.BlochBoundary(k_component=kx, length=Lx)
+    grid[:, :, :pml_thickness] = fdtd.PML(name="pml_low")
+    grid[:, :, -pml_thickness:] = fdtd.PML(name="pml_high")
 
-# 源設定
-grid[:, 0, source_z] = fdtd.ComplexPlaneWave(
-    wavelength=wavelength,
-    period=wavelength / 3e8,
-    amplitude=1.0 + 0j,
-    theta_deg=theta_deg,
-    polarization_axis="x",
-    pulse=False,
-    name="source"
-)
+    # 源設定
+    grid[:, 0, source_z] = fdtd.ComplexPlaneWave(
+        wavelength=wavelength,
+        period=wavelength / 3e8,
+        amplitude=1.0 + 0j,
+        theta_deg=theta_deg,
+        polarization_axis="x",
+        pulse=False,
+        name="source"
+    )
 
-# 🔧 修正後的探測器設定
-grid[:, 0, det_z_T] = fdtd.LineDetector(name="T", flip_sign=False)  # 穿透
-grid[:, 0, det_z_R] = fdtd.LineDetector(name="R", flip_sign=True)   # 反射
+    # 🔧 修正後的探測器設定
+    grid[:, 0, det_z_T] = fdtd.LineDetector(name="T", flip_sign=False)  # 穿透
+    grid[:, 0, det_z_R] = fdtd.LineDetector(name="R", flip_sign=True)   # 反射
 
-simfolder = None
-if with_structure:
-    # 結構設定
-    grid[:, 0, start_z:end_z] = fdtd.Object(n=1.5, k=0, name="structure")
-    simfolder = grid.save_simulation("test_bloch_xz")
-    
-    print(f"✅ 添加結構：n=1.5, 厚度={(end_z-start_z)*grid_spacing*1e6:.2f}μm")
+    simfolder = None
+    if with_structure:
+        # 結構設定
+        grid[:, 0, start_z:end_z] = fdtd.Object(n=1.5, k=0, name="structure")
+        simfolder = grid.save_simulation("test_bloch_xz")
+        
+        print(f"✅ 添加結構：n=1.5, 厚度={(end_z-start_z)*grid_spacing*1e6:.2f}μm")
 
-return grid, simfolder
-```
+    return grid, simfolder
 
 def calculate_source_power(grid):
-“”“計算入射源功率”””
-source = grid.source
-source_length = len(getattr(source, ‘x’, [1])) * grid_spacing
+    """計算入射源功率"""
+    source = grid.source
+    source_length = len(getattr(source, 'x', [1])) * grid_spacing
 
-```
-# 自由空間阻抗和振幅
-Z0 = 377.0  # Ω
-E0 = abs(source.amplitude)
 
-# 功率密度和總功率
-power_density = 0.5 * E0**2 / Z0
-P_incident = power_density * source_length
+    # 自由空間阻抗和振幅
+    Z0 = 377.0  # Ω
+    E0 = abs(source.amplitude)
 
-print(f"📊 源功率計算:")
-print(f"   振幅: {E0:.3f} V/m")
-print(f"   源長度: {source_length*1e6:.2f} μm")
-print(f"   入射功率: {P_incident:.6e} W/m")
+    # 功率密度和總功率
+    power_density = 0.5 * E0 ** 2 / Z0
+    P_incident = power_density * source_length
 
-return P_incident
-```
+    print(f"📊 源功率計算:")
+    print(f"   振幅: {E0:.3f} V/m")
+    print(f"   源長度: {source_length*1e6:.2f} μm")
+    print(f"   入射功率: {P_incident:.6e} W/m")
 
-def analyze_results(grid, P_incident, stabilization_steps=100):
-“”“分析穿透反射結果”””
-print(f”\n📊 結果分析:”)
+    return P_incident
 
-```
-# 檢查數據長度
-T_data = np.array(grid.T.S)
-R_data = np.array(grid.R.S)
 
-print(f"   數據長度: T={len(T_data)}, R={len(R_data)}")
+def analyze_results(grid, P_incident, stabilization_steps=10):
+    """分析穿透反射結果"""
+    print(f"\n📊 結果分析:")
 
-if len(T_data) < stabilization_steps:
-    print(f"⚠️ 警告：數據長度不足，使用全部數據")
-    T_avg = np.mean(T_data)
-    R_avg = np.mean(R_data)
-else:
-    # 使用最後stabilization_steps個數據點
-    T_avg = np.mean(T_data[-stabilization_steps:])
-    R_avg = np.mean(R_data[-stabilization_steps:])
+    # 檢查數據長度
+    T_data = np.array(grid.T.S)
+    R_data = np.array(grid.R.S)
 
-# 計算穿透反射率
-T_ratio = T_avg / P_incident if P_incident != 0 else 0
-R_ratio = abs(R_avg) / P_incident if P_incident != 0 else 0  # 反射取絕對值
-A_ratio = 1 - T_ratio - R_ratio  # 吸收率
+    print(f"   數據長度: T={len(T_data)}, R={len(R_data)}")
 
-print(f"   原始功率: T={T_avg:.6e}, R={R_avg:.6e}")
-print(f"   穿透率: T = {T_ratio:.3f} ({T_ratio*100:.1f}%)")
-print(f"   反射率: R = {R_ratio:.3f} ({R_ratio*100:.1f}%)")
-print(f"   吸收率: A = {A_ratio:.3f} ({A_ratio*100:.1f}%)")
-print(f"   能量守恆: T+R+A = {T_ratio+R_ratio+A_ratio:.3f}")
+    if len(T_data) < stabilization_steps:
+        print(f"⚠️ 警告：數據長度不足，使用全部數據")
+        T_avg = np.mean(T_data)
+        R_avg = np.mean(R_data)
+    else:
+        # 使用最後stabilization_steps個數據點
+        T_avg = np.mean(T_data[-stabilization_steps:])
+        R_avg = np.mean(R_data[-stabilization_steps:])
 
-return {
-    'T': T_ratio,
-    'R': R_ratio, 
-    'A': A_ratio,
-    'T_raw': T_avg,
-    'R_raw': R_avg,
-    'P_incident': P_incident
-}
-```
+    # 計算穿透反射率
+    T_ratio = T_avg / P_incident if P_incident != 0 else 0
+    R_ratio = abs(R_avg) / P_incident if P_incident != 0 else 0  # 反射取絕對值
+    A_ratio = 1 - T_ratio - R_ratio  # 吸收率
 
-def run_simulation(with_structure=True, total_steps=500, animation_interval=50):
-“”“運行完整模擬”””
-print(f”\n🚀 開始模擬 ({‘有結構’ if with_structure else ‘無結構’})”)
-print(”=” * 60)
+    print(f"   原始功率: T={T_avg:.6e}, R={R_avg:.6e}")
+    print(f"   穿透率: T = {T_ratio:.3f} ({T_ratio*100:.1f}%)")
+    print(f"   反射率: R = {R_ratio:.3f} ({R_ratio*100:.1f}%)")
 
-```
-# 創建網格
-grid, simfolder = make_grid(with_structure=with_structure)
+    return {
+        'T': T_ratio,
+        'R': R_ratio, 
+        'T_raw': T_avg,
+        'R_raw': R_avg,
+        'P_incident': P_incident
+    }
 
-# 計算源功率
-P_incident = calculate_source_power(grid)
 
-# 運行模擬
-print(f"\n⚡ 執行 {total_steps} 個時間步...")
-simulation_start = time.time()
+def run_simulation(with_structure=True, total_steps=500, animation_interval=10):
+    """運行完整模擬"""
+    print(f"\n🚀 開始模擬 ({'有結構' if with_structure else '無結構'})")
+    print("=" * 60)
 
-for t in range(total_steps):
-    grid.step()
-    
-    # 動畫顯示（可選）
-    if simfolder and t % animation_interval == 0:
-        try:
-            fig = grid.visualize(
-                y=0, 
-                animate=True, 
-                index=t, 
-                save=True, 
-                folder=simfolder, 
-                real_field_mode=True, 
-                real_component="Ex"
-            )
-            plt.title(f"t = {t} / {total_steps}")
-            ax = plt.gca()
-            ax.set_xlabel("x (μm)")
-            ax.set_ylabel("z (μm)")
-            plt.tight_layout()
-            clear_output(wait=True)
-        except Exception as e:
-            print(f"⚠️ 可視化錯誤: {e}")
-    
-    # 進度顯示
-    if t % 50 == 0:
-        elapsed = time.time() - simulation_start
-        if t > 0:
-            eta = elapsed * (total_steps - t) / t
-            print(f"   進度: {t:3d}/{total_steps} ({t/total_steps*100:5.1f}%) - 已用{elapsed:.1f}s, 剩餘{eta:.1f}s")
+    # 創建網格
+    grid, simfolder = make_grid(with_structure=with_structure)
 
-simulation_time = time.time() - simulation_start
-print(f"✅ 模擬完成！耗時: {simulation_time:.1f} 秒")
+    # 計算源功率
+    P_incident = calculate_source_power(grid)
 
-# 分析結果
-results = analyze_results(grid, P_incident)
+    # 運行模擬
+    print(f"\n⚡ 執行 {total_steps} 個時間步...")
+    simulation_start = time.time()
 
-return results
-```
+    for t in range(total_steps):
+        grid.step()
+        
+        # 動畫顯示（可選）
+        if simfolder and t % animation_interval == 0:
+            try:
+                fig = grid.visualize(
+                    y=0, 
+                    animate=True, 
+                    index=t, 
+                    save=True, 
+                    folder=simfolder, 
+                    real_field_mode=True, 
+                    real_component="Ex"
+                )
+                plt.title(f"t = {t} / {total_steps}")
+                ax = plt.gca()
+                ax.set_xlabel("x (μm)")
+                ax.set_ylabel("z (μm)")
+                plt.tight_layout()
+                clear_output(wait=True)
+            except Exception as e:
+                print(f"⚠️ 可視化錯誤: {e}")
+        
+        # # 進度顯示
+        # if t % 50 == 0:
+        #     elapsed = time.time() - simulation_start
+        #     if t > 0:
+        #         eta = elapsed * (total_steps - t) / t
+        #         print(f"   進度: {t:3d}/{total_steps} ({t/total_steps*100:5.1f}%) - 已用{elapsed:.1f}s, 剩餘{eta:.1f}s")
+
+    simulation_time = time.time() - simulation_start
+    print(f"✅ 模擬完成！耗時: {simulation_time:.1f} 秒")
+
+    # 分析結果
+    results = analyze_results(grid, P_incident)
+
+    return results
+
 
 # ==== 主程式執行 ====
 
-if **name** == “**main**”:
-print(“🔬 FDTD 穿透反射率計算”)
-print(”=” * 60)
-
-```
-try:
-    # 🔧 方法1：參考運行（如果fdtd.reference_run可用）
+if __name__ == "__main__":
     try:
-        print("\n📊 步驟1：參考運行（無結構）")
-        ref_result = fdtd.reference_run(grid_factory=lambda: make_grid(False), total_steps=500)
-        print(f"參考結果: T={ref_result['T']:.6e}, R={ref_result['R']:.6e}")
-        
-        # 有結構的模擬
-        print("\n📊 步驟2：有結構模擬")
-        struct_result = run_simulation(with_structure=True, total_steps=500)
-        
-        # 相對比較
-        print(f"\n📋 最終結果比較:")
-        print(f"   無結構: T={ref_result['T']:.6e}, R={ref_result['R']:.6e}")
-        print(f"   有結構: T={struct_result['T_raw']:.6e}, R={struct_result['R_raw']:.6e}")
-        print(f"   歸一化: T={struct_result['T']:.3f}, R={struct_result['R']:.3f}")
-        
-    except (AttributeError, NameError):
-        print("⚠️ reference_run 不可用，改用單次模擬")
-        
-        # 🔧 方法2：單次模擬
         results = run_simulation(with_structure=True, total_steps=800)
-        
         print(f"\n📋 最終結果:")
         print(f"   穿透率: T = {results['T']:.3f} ({results['T']*100:.1f}%)")
         print(f"   反射率: R = {results['R']:.3f} ({results['R']*100:.1f}%)")
-        print(f"   吸收率: A = {results['A']:.3f} ({results['A']*100:.1f}%)")
         
         # 🔧 理論比較（Fresnel公式）
         n1, n2 = 1.0, 1.5  # 真空 → 介電材料
-        r_theory = ((n1 - n2) / (n1 + n2))**2
-        t_theory = 4*n1*n2 / (n1 + n2)**2
+        r_theory = ((n1 - n2) / (n1 + n2)) ** 2
+        t_theory = 4*n1*n2 / (n1 + n2) ** 2
         
         print(f"\n🧮 理論比較（Fresnel公式）:")
         print(f"   理論反射率: R = {r_theory:.3f}")
         print(f"   理論穿透率: T = {t_theory:.3f}")
         print(f"   差異: ΔR = {abs(results['R'] - r_theory):.3f}, ΔT = {abs(results['T'] - t_theory):.3f}")
 
-except Exception as e:
-    print(f"\n💥 程式執行錯誤: {e}")
-    import traceback
-    traceback.print_exc()
+    except Exception as e:
+        print(f"\n💥 程式執行錯誤: {e}")
+        import traceback
+        traceback.print_exc()
 
-finally:
-    print(f"\n✅ 程式執行完成")
-```
+    finally:
+        print(f"\n✅ 程式執行完成")
