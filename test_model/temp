@@ -1,402 +1,317 @@
-# FDTD週期邊界條件診斷工具
+# 阻抗問題修正工具
 
 import numpy as np
-import matplotlib.pyplot as plt
 
-def diagnose_pbc_implementation(grid, grid_spacing):
+def fix_impedance_problem(grid, grid_spacing):
 “””
-對比MATLAB第14章實現，診斷週期邊界條件的問題
+修正FDTD中的阻抗問題（H場過大問題）
 “””
 
 ```
-print("🚨 FDTD週期邊界條件診斷")
-print("="*80)
-
-# === 1. 基本配置檢查 ===
-print("1. 基本配置對比：")
-print("   MATLAB第14章 vs 您的實現")
-print("   " + "-"*50)
-
-# 檢查網格配置
-print(f"   網格形狀: {grid.shape}")
-print(f"   force_complex: {getattr(grid, 'force_complex', False)}")
-
-# 檢查邊界條件類型
-boundary_types = []
-for boundary in grid.boundaries:
-    boundary_types.append(type(boundary).__name__)
-print(f"   邊界類型: {boundary_types}")
-
-# === 2. 週期邊界實現檢查 ===
-print(f"\n2. 週期邊界實現檢查：")
-
-has_bloch = any('Bloch' in str(type(b)) for b in grid.boundaries)
-has_periodic = any('Periodic' in str(type(b)) for b in grid.boundaries)
-
-print(f"   有Bloch邊界: {has_bloch}")
-print(f"   有Periodic邊界: {has_periodic}")
-
-if has_bloch:
-    for b in grid.boundaries:
-        if 'Bloch' in str(type(b)):
-            print(f"   Bloch參數: k_component={getattr(b, 'k_component', 'N/A')}")
-            print(f"              length={getattr(b, 'length', 'N/A')}")
-            print(f"              phase={getattr(b, 'phase', 'N/A')}")
-
-# === 3. 源實現檢查 ===
-print(f"\n3. 源實現檢查：")
-
-for i, src in enumerate(grid.sources):
-    src_type = type(src).__name__
-    print(f"   源{i}: {src_type}")
-    
-    if hasattr(src, 'theta_deg'):
-        print(f"         入射角: {src.theta_deg}°")
-    if hasattr(src, 'wavelength'):
-        print(f"         波長: {src.wavelength*1e9:.0f} nm")
-    if hasattr(src, 'polarization_axis'):
-        print(f"         極化: {src.polarization_axis}")
-
-# === 4. 關鍵差異識別 ===
-print(f"\n4. 與MATLAB第14章的關鍵差異：")
-print("   " + "-"*50)
-
-issues = []
-
-# 差異1: 源類型
-matlab_uses_pbc_source = True  # MATLAB用特殊的PBC源
-python_uses_complex_plane_wave = any('ComplexPlaneWave' in str(type(s)) for s in grid.sources)
-
-if not python_uses_complex_plane_wave:
-    issues.append("❌ 未使用複數平面波源")
-    print("   ❌ 源類型差異:")
-    print("      MATLAB: 使用PBC特殊源（相位修正）")
-    print("      您的實現: 使用標準源")
-else:
-    print("   ✅ 使用複數平面波源")
-
-# 差異2: 場更新方程
-if not has_bloch and not has_periodic:
-    issues.append("❌ 缺少週期邊界條件")
-    print("   ❌ 邊界條件差異:")
-    print("      MATLAB: 專門的PBC更新方程")
-    print("      您的實現: 標準邊界條件")
-
-# 差異3: 複數場處理
-E_is_complex = np.iscomplexobj(grid.E)
-H_is_complex = np.iscomplexobj(grid.H)
-
-if not (E_is_complex and H_is_complex):
-    issues.append("❌ 場不是複數類型")
-    print("   ❌ 場類型差異:")
-    print("      MATLAB: 所有場都是複數")
-    print(f"      您的實現: E複數={E_is_complex}, H複數={H_is_complex}")
-else:
-    print("   ✅ 場為複數類型")
-
-# === 5. 檢測器實現檢查 ===
-print(f"\n5. 檢測器實現檢查：")
-
-for i, det in enumerate(grid.detectors):
-    det_type = type(det).__name__
-    print(f"   檢測器{i}: {det_type}")
-    
-    # 檢查是否有相位修正
-    has_phase_correction = hasattr(det, 'phase_correction') or hasattr(det, 'spatial_phase')
-    print(f"             相位修正: {has_phase_correction}")
-    
-    if not has_phase_correction:
-        issues.append(f"❌ 檢測器{i}缺少相位修正")
-
-# === 6. 提出修正建議 ===
-print(f"\n6. 修正建議：")
-print("   " + "="*50)
-
-if issues:
-    print("   🔧 需要修正的問題：")
-    for issue in issues:
-        print(f"      {issue}")
-    
-    print(f"\n   💡 具體修正步驟：")
-    
-    if "❌ 未使用複數平面波源" in str(issues):
-        print("      1. 確保使用ComplexPlaneWave源")
-        print("         - 設定適當的theta_deg參數")
-        print("         - 確保amplitude為複數")
-    
-    if "❌ 缺少週期邊界條件" in str(issues):
-        print("      2. 添加正確的週期邊界條件：")
-        print("         - 使用BlochBoundary而非普通PML")
-        print("         - 設定正確的k_component參數")
-    
-    if "❌ 場不是複數類型" in str(issues):
-        print("      3. 確保複數場處理：")
-        print("         - Grid初始化時設定force_complex=True")
-        print("         - 調用grid.promote_dtypes_to_complex()")
-    
-    if any("檢測器" in issue for issue in issues):
-        print("      4. 修正檢測器實現：")
-        print("         - 添加相位修正計算")
-        print("         - 使用複數Poynting向量計算")
-
-else:
-    print("   ✅ 基本配置看起來正確")
-    print("   🔍 可能的問題在於數值實現細節")
-
-return issues
-```
-
-def compare_with_analytical_solution():
-“””
-與解析解對比，驗證計算正確性
-“””
-print(f”\n7. 解析解對比：”)
-print(”   “ + “=”*30)
-
-```
-# Fresnel公式（垂直入射）
-n1, n2 = 1.0, 1.5  # 空氣 → 介電質
-
-# 反射係數
-r = (n1 - n2) / (n1 + n2)
-R_theory = abs(r)**2
-
-# 穿透係數
-t = 2*n1 / (n1 + n2)
-T_theory = abs(t)**2 * n2/n1  # 考慮折射率差異
-
-print(f"   理論值（垂直入射）：")
-print(f"   反射率 R = {R_theory:.4f} ({R_theory*100:.1f}%)")
-print(f"   穿透率 T = {T_theory:.4f} ({T_theory*100:.1f}%)")
-print(f"   總和 R+T = {R_theory + T_theory:.4f}")
-
-return R_theory, T_theory
-```
-
-def suggest_matlab_style_implementation():
-“””
-建議符合MATLAB第14章風格的實現
-“””
-print(f”\n8. MATLAB風格實現建議：”)
-print(”   “ + “=”*40)
-
-```
-print("""
-```
-
-🎯 關鍵實現要點：
-
-1. 源設定（參照Listing 14.3）：
-   
-   ```python
-   # 設定水平波數
-   kx = 100  # radian/meter
-   ky = 0    # radian/meter
-   
-   # 計算最小頻率
-   f_min = c * sqrt(kx^2 + ky^2) / (2*pi)
-   
-   # 設定調制高斯波形
-   source = ComplexPlaneWave(
-       wavelength=wavelength,
-       theta_deg=theta_deg,  # 由kx/ky計算得出
-       amplitude=1.0+0j,
-       pulse=False
-   )
-   ```
-1. 邊界條件（參照Section 14.2）：
-   
-   ```python
-   # x方向週期邊界
-   grid[0, :, :] = BlochBoundary(k_component=kx, length=Lx)
-   
-   # z方向吸收邊界
-   grid[:, :, :pml_thick] = PML()
-   grid[:, :, -pml_thick:] = PML()
-   ```
-1. 場更新（參照Equations 14.9-14.20）：
-- 所有場都必須是複數
-- 邊界更新包含相位因子 exp(±j*k*P)
-- 檢測器需要相位修正
-1. 檢測器（參照Section 14.4）：
-   
-   ```python
-   # 相位修正（參照Equation 14.29）
-   phase_correction = exp(-j*kx*(i-0.5)*dx - j*ky*(j-1)*dy)
-   E_corrected = E_raw * phase_correction
-   
-   # 計算反射/穿透係數
-   E_total = average(E_corrected)
-   E_incident = (E_total + eta0*H_total*k/kz) / 2
-   E_reflected = E_total - E_incident
-   Gamma = E_reflected / E_incident
-   ```
-
-“””)
-
-def run_complete_diagnosis(grid, grid_spacing):
-“””
-運行完整診斷
-“””
-# 1. 基本診斷
-issues = diagnose_pbc_implementation(grid, grid_spacing)
-
-```
-# 2. 解析解對比
-R_theory, T_theory = compare_with_analytical_solution()
-
-# 3. 實現建議
-suggest_matlab_style_implementation()
-
-# 4. 總結
-print(f"\n🎯 診斷總結：")
+print("🔧 阻抗問題修正")
 print("="*50)
 
-if len(issues) == 0:
-    print("✅ 配置基本正確，問題可能在數值實現細節")
-    print("🔍 建議檢查：場更新方程、相位修正、功率計算")
-elif len(issues) <= 2:
-    print("⚠️ 有少數問題需要修正")
-    print("🔧 修正後應該能得到正確結果")
-else:
-    print("❌ 發現多個關鍵問題")
-    print("🚨 需要重新實現關鍵部分")
-
-print(f"\n最重要的修正優先級：")
-print("1. 確保使用複數場和週期邊界條件")
-print("2. 實現正確的相位修正")
-print("3. 驗證功率計算公式")
-
-return issues, R_theory, T_theory
-```
-
-# === 簡化版診斷函數（直接可用） ===
-
-def quick_diagnosis(grid, grid_spacing):
-“””
-快速診斷您現有的FDTD設定
-“””
-print(“🚨 快速FDTD診斷”)
-print(”=”*50)
-
-```
-# 1. 基本資訊
-print(f"1. 基本配置:")
-print(f"   網格形狀: {grid.shape}")
-print(f"   Grid spacing: {grid_spacing*1e9:.1f} nm")
-print(f"   Time step: {grid.time_step:.2e} s")
-
-# 2. 場類型檢查
-E_complex = 'complex' in str(grid.E.dtype)
-H_complex = 'complex' in str(grid.H.dtype)
-print(f"\n2. 場數據類型:")
-print(f"   E場複數: {E_complex}")
-print(f"   H場複數: {H_complex}")
-
-# 3. 邊界條件
-print(f"\n3. 邊界條件:")
-for i, boundary in enumerate(grid.boundaries):
-    btype = type(boundary).__name__
-    print(f"   邊界{i}: {btype}")
-    if 'Bloch' in btype:
-        print(f"           k_component: {getattr(boundary, 'k_component', 'N/A')}")
-        print(f"           length: {getattr(boundary, 'length', 'N/A')}")
-
-# 4. 源檢查
-print(f"\n4. 源配置:")
-for i, source in enumerate(grid.sources):
-    stype = type(source).__name__
-    print(f"   源{i}: {stype}")
-    if hasattr(source, 'theta_deg'):
-        print(f"         角度: {source.theta_deg}°")
-    if hasattr(source, 'amplitude'):
-        print(f"         振幅: {source.amplitude}")
-
-# 5. 檢測器
-print(f"\n5. 檢測器:")
-for i, detector in enumerate(grid.detectors):
-    dtype = type(detector).__name__
-    print(f"   檢測器{i}: {dtype}")
-    if hasattr(detector, 'flip_sign'):
-        print(f"            反向: {detector.flip_sign}")
-
-# 6. 場數值檢查
+# 1. 診斷當前狀況
 E_max = float(np.max(np.abs(grid.E)))
 H_max = float(np.max(np.abs(grid.H)))
-print(f"\n6. 場強度:")
-print(f"   |E|_max: {E_max:.3e}")
-print(f"   |H|_max: {H_max:.3e}")
+current_impedance = E_max / H_max if H_max > 0 else 0
+target_impedance = 377.0
 
-if H_max > 1e-15:
-    impedance = E_max / H_max
-    print(f"   實際阻抗: {impedance:.1f} Ω")
-    print(f"   理論阻抗: 377 Ω")
-    if abs(impedance - 377) > 100:
-        print("   ❌ 阻抗嚴重偏離！")
-    else:
-        print("   ✅ 阻抗合理")
+print(f"當前狀況:")
+print(f"  |E|_max = {E_max:.3e}")
+print(f"  |H|_max = {H_max:.3e}")
+print(f"  實際阻抗 = {current_impedance:.1f} Ω")
+print(f"  目標阻抗 = {target_impedance:.1f} Ω")
+
+# 2. 計算修正因子
+correction_factor = current_impedance / target_impedance
+print(f"\n修正因子 = {correction_factor:.2f}")
+print(f"需要將H場除以 {correction_factor:.2f}")
+
+# 3. 分析問題根源
+print(f"\n🔍 問題根源分析:")
+
+# 檢查時間步長
+c = 3e8
+expected_dt = grid.courant_number * grid_spacing / c
+actual_dt = grid.time_step
+dt_ratio = actual_dt / expected_dt
+
+print(f"  時間步長檢查:")
+print(f"    預期 dt = {expected_dt:.2e} s")
+print(f"    實際 dt = {actual_dt:.2e} s")
+print(f"    比例 = {dt_ratio:.2e}")
+
+if abs(dt_ratio - 1) > 0.1:
+    print(f"    ❌ 時間步長異常！")
+    time_step_problem = True
 else:
-    print("   ❌ H場為零！")
+    print(f"    ✅ 時間步長正常")
+    time_step_problem = False
 
-# 7. 主要問題識別
-print(f"\n🎯 主要問題:")
-issues = []
+# 檢查物理常數
+mu0 = 4e-7 * np.pi
+expected_h_coeff = actual_dt / mu0
 
-if not (E_complex and H_complex):
-    issues.append("❌ 場不是複數類型")
+print(f"\n  H場更新係數檢查:")
+print(f"    理論係數 dt/μ₀ = {expected_h_coeff:.2e}")
+print(f"    如果係數過大 {correction_factor:.0f} 倍，說明:")
 
-if not any('Bloch' in type(b).__name__ for b in grid.boundaries):
-    issues.append("❌ 缺少BlochBoundary")
+if correction_factor > 100:
+    print(f"    ❌ H場更新係數嚴重過大")
+    print(f"    可能原因：")
+    print(f"      1. time_step 計算錯誤")
+    print(f"      2. μ₀ 值錯誤")
+    print(f"      3. curl_E 函數有額外係數")
+    print(f"      4. update_H 中有重複係數")
 
-if H_max < 1e-15:
-    issues.append("❌ 磁場為零")
-elif abs(E_max/H_max - 377) > 100:
-    issues.append("❌ 阻抗異常")
-
-if len(issues) == 0:
-    print("   ✅ 基本配置正確")
-else:
-    for issue in issues:
-        print(f"   {issue}")
-
-return issues
+return correction_factor, time_step_problem
 ```
 
-# 使用示例
+def apply_temporary_fix(grid, correction_factor):
+“””
+應用臨時修正（僅用於測試）
+“””
+print(f”\n🚨 應用臨時修正（僅用於測試）”)
+print(f”將H場除以 {correction_factor:.2f}”)
 
-def example_usage():
+```
+# 保存原始H場
+H_original = grid.H.copy()
+
+# 修正H場
+grid.H = grid.H / correction_factor
+
+# 重新檢查阻抗
+E_max = float(np.max(np.abs(grid.E)))
+H_max = float(np.max(np.abs(grid.H)))
+new_impedance = E_max / H_max if H_max > 0 else 0
+
+print(f"修正後阻抗: {new_impedance:.1f} Ω")
+
+if abs(new_impedance - 377) < 50:
+    print(f"✅ 阻抗修正成功！")
+    return True, H_original
+else:
+    print(f"❌ 阻抗仍然異常")
+    grid.H = H_original  # 恢復原始值
+    return False, H_original
+```
+
+def investigate_root_cause(grid, grid_spacing):
 “””
-在您的test_bloch_PW_xz4.py中添加這幾行：
+深入調查根本原因
 “””
-print(”\n” + “=”*60)
-print(“📋 使用方法：”)
-print(“在您的代碼中添加以下內容：”)
+print(f”\n🔬 深入調查根本原因”)
+print(”=”*40)
+
+```
+# 1. 檢查Grid初始化參數
+print(f"1. Grid初始化檢查:")
+print(f"   courant_number: {grid.courant_number}")
+print(f"   time_step: {grid.time_step:.2e}")
+print(f"   grid_spacing: {grid_spacing:.2e}")
+
+# 2. 檢查物理常數
+print(f"\n2. 物理常數檢查:")
+
+# 檢查grid.py中的常數定義
+c_from_grid = grid_spacing * grid.courant_number / grid.time_step
+print(f"   從網格推算的光速: {c_from_grid:.2e} m/s")
+print(f"   標準光速: 3.0e8 m/s")
+
+c_error = abs(c_from_grid - 3e8) / 3e8 * 100
+print(f"   光速誤差: {c_error:.1f}%")
+
+if c_error > 10:
+    print(f"   ❌ 光速計算異常！")
+    print(f"   可能問題：")
+    print(f"     - grid_spacing 單位錯誤")
+    print(f"     - time_step 計算錯誤")
+    print(f"     - courant_number 設定錯誤")
+
+# 3. 檢查材料參數
+print(f"\n3. 材料參數檢查:")
+
+# 檢查 inverse_permeability
+perm_sample = grid.inverse_permeability[grid.Nx//2, 0, grid.Nz//2, 0]
+perm_value = float(perm_sample.real) if hasattr(perm_sample, 'real') else float(perm_sample)
+
+print(f"   inverse_permeability: {perm_value:.6f}")
+
+if abs(perm_value - 1.0) > 0.01:
+    print(f"   ❌ inverse_permeability ≠ 1.0")
+    print(f"   這會導致H場更新異常！")
+else:
+    print(f"   ✅ inverse_permeability = 1.0")
+
+return c_error, perm_value
+```
+
+def suggest_permanent_fixes(correction_factor, time_step_problem, c_error, perm_value):
+“””
+建議永久性修正方案
+“””
+print(f”\n💡 永久性修正建議”)
+print(”=”*40)
+
+```
+print(f"根據診斷結果，建議按優先級修正：")
+
+# 優先級1：時間步長問題
+if time_step_problem or c_error > 10:
+    print(f"\n🎯 優先級1：修正時間步長計算")
+    print(f"   問題：Grid.__init__() 中的 time_step 計算")
+    print(f"   檢查：")
+    print(f"     self.time_step = self.courant_number * self.grid_spacing / bd.c0")
+    print(f"   可能問題：")
+    print(f"     - bd.c0 的值不是 3e8")
+    print(f"     - grid_spacing 單位錯誤")
+    print(f"     - courant_number 計算錯誤")
+    print(f"   修正方法：")
+    print(f"     在 Grid.__init__() 中添加調試：")
+    print(f"     print(f'bd.c0 = {{bd.c0}}')") 
+    print(f"     print(f'time_step calculation: {{self.courant_number}} * {{self.grid_spacing}} / {{bd.c0}}')")
+
+# 優先級2：材料參數問題
+if abs(perm_value - 1.0) > 0.01:
+    print(f"\n🎯 優先級2：修正材料參數")
+    print(f"   問題：inverse_permeability ≠ 1.0")
+    print(f"   檢查：Grid.__init__() 中的材料參數初始化")
+    print(f"   修正：確保 permeability=1.0 正確設定")
+
+# 優先級3：H場更新方程
+if correction_factor > 10:
+    print(f"\n🎯 優先級3：檢查H場更新方程")
+    print(f"   問題：H場更新係數過大 {correction_factor:.0f} 倍")
+    print(f"   檢查位置：")
+    print(f"     1. grid.py 中的 update_H() 函數")
+    print(f"     2. curl_E() 函數是否有額外係數")
+    print(f"     3. 是否有重複的時間或空間係數")
+    print(f"   修正方法：")
+    print(f"     在 update_H() 中添加調試：")
+    print(f"     print(f'courant_number: {{self.courant_number}}')") 
+    print(f"     print(f'inverse_permeability sample: {{self.inverse_permeability[10,0,10,0]}}')")
+    print(f"     curl_max = bd.max(bd.abs(curl_E(self.E)))")
+    print(f"     print(f'curl_E max: {{curl_max}}')")
+```
+
+def complete_impedance_fix(grid, grid_spacing):
+“””
+完整的阻抗問題修正流程
+“””
+print(“🚨 完整阻抗問題診斷與修正”)
+print(”=”*60)
+
+```
+# 步驟1：診斷問題
+correction_factor, time_step_problem = fix_impedance_problem(grid, grid_spacing)
+
+# 步驟2：深入調查
+c_error, perm_value = investigate_root_cause(grid, grid_spacing)
+
+# 步驟3：嘗試臨時修正（用於驗證）
+print(f"\n" + "="*50)
+temp_fix_success, H_original = apply_temporary_fix(grid, correction_factor)
+
+if temp_fix_success:
+    print(f"\n✅ 臨時修正成功！證明問題確實是H場係數錯誤")
+    print(f"📋 現在可以用修正後的H場計算正確的T/R")
+    
+    # 測試一下T/R計算
+    print(f"\n🧪 測試修正後的T/R計算...")
+    test_power_calculation(grid, grid_spacing)
+    
+    # 恢復原始H場
+    grid.H = H_original
+    print(f"\n⚠️ H場已恢復原始值")
+
+# 步驟4：提供永久修正建議
+suggest_permanent_fixes(correction_factor, time_step_problem, c_error, perm_value)
+
+return correction_factor
+```
+
+def test_power_calculation(grid, grid_spacing):
+“””
+測試修正後的功率計算
+“””
+try:
+# 簡單的功率計算測試
+if hasattr(grid, ‘T’) and hasattr(grid.T, ‘S’) and len(grid.T.S) > 0:
+# 重新計算最後一步的Poynting向量
+grid.T.detect_S()
+grid.R.detect_S()
+
+```
+        P_T = float(grid.T.S[-1]) if grid.T.S else 0
+        P_R = float(abs(grid.R.S[-1])) if grid.R.S else 0
+        
+        # 計算入射功率（簡化）
+        E_max = float(np.max(np.abs(grid.E)))
+        source_length = grid.Nx * grid_spacing
+        P_incident = 0.5 * E_max**2 / 377.0 * source_length
+        
+        T_ratio = P_T / P_incident if P_incident > 0 else 0
+        R_ratio = P_R / P_incident if P_incident > 0 else 0
+        
+        print(f"   修正後功率計算:")
+        print(f"     P_incident = {P_incident:.2e} W/m")
+        print(f"     P_transmitted = {P_T:.2e} W/m")
+        print(f"     P_reflected = {P_R:.2e} W/m")
+        print(f"     T = {T_ratio:.3f} ({T_ratio*100:.1f}%)")
+        print(f"     R = {R_ratio:.3f} ({R_ratio*100:.1f}%)")
+        print(f"     T + R = {T_ratio + R_ratio:.3f}")
+        
+        # 與理論值比較
+        R_theory = ((1.0 - 1.5) / (1.0 + 1.5))**2
+        T_theory = 1 - R_theory
+        
+        print(f"\n   與理論對比:")
+        print(f"     理論: T={T_theory:.3f}, R={R_theory:.3f}")
+        print(f"     計算: T={T_ratio:.3f}, R={R_ratio:.3f}")
+        
+        if abs(T_ratio - T_theory) < 0.1 and abs(R_ratio - R_theory) < 0.1:
+            print(f"     ✅ 與理論值接近！修正有效")
+        else:
+            print(f"     ⚠️ 仍與理論值有差異")
+            
+except Exception as e:
+    print(f"   功率計算測試失敗: {e}")
+```
+
+# 使用方法
+
+def usage_example():
+“””
+使用示例
+“””
 print(”””
+🔧 使用方法：
 
-# 在模擬運行後添加診斷
+1. 在您的 test_bloch_PW_xz4.py 中添加：
+
+# 在模擬完成後
 
 if **name** == “**main**”:
 try:
 results, grid = run_simulation(with_structure=True, total_steps=600)
 
 ```
-    # 🔍 添加診斷
-    issues = quick_diagnosis(grid, grid_spacing)
+    # 診斷並修正阻抗問題
+    correction_factor = complete_impedance_fix(grid, grid_spacing)
     
-    # 如果有問題，先修正再繼續分析
-    if issues:
-        print("⚠️ 發現問題，需要修正！")
-    else:
-        # 繼續您的原始分析
-        P_incident = grid.source.get_source_power(grid_spacing=grid_spacing)
-        # ...
 except Exception as e:
     print(f"錯誤: {e}")
-""")
 ```
 
-# 如果直接運行此檔案
+1. 根據輸出的建議，檢查並修正：
+- Grid.**init**() 中的 time_step 計算
+- backend.py 中的 c0 值
+- update_H() 中的係數
+1. 修正後重新運行模擬
+   “””)
 
 if **name** == “**main**”:
-print(“FDTD週期邊界條件診斷工具”)
-example_usage()
+print(“阻抗問題修正工具”)
+usage_example()
