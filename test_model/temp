@@ -1,220 +1,402 @@
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-import time
+# FDTD週期邊界條件診斷工具
+
 import numpy as np
 import matplotlib.pyplot as plt
-from IPython.display import clear_output
-from scipy.ndimage import gaussian_filter1d
-import fdtd
 
-# ==== 模擬參數 ====
+def diagnose_pbc_implementation(grid, grid_spacing):
+“””
+對比MATLAB第14章實現，診斷週期邊界條件的問題
+“””
 
-fdtd.set_backend("numpy")
-wavelength = fdtd.nm(1550)
-grid_spacing = fdtd.nm(20)
-x_span, z_span = fdtd.um(2), fdtd.um(6)
-Nx = fdtd.to_grid(x_span, grid_spacing)
-Nz = fdtd.to_grid(z_span, grid_spacing)
-theta_deg = 0
-theta = np.deg2rad(theta_deg)
-k0 = 2 * np.pi / wavelength
-kx = k0 * np.sin(theta)
-Lx = Nx * grid_spacing
+```
+print("🚨 FDTD週期邊界條件診斷")
+print("="*80)
 
-# 🔧 修正後的位置設定
+# === 1. 基本配置檢查 ===
+print("1. 基本配置對比：")
+print("   MATLAB第14章 vs 您的實現")
+print("   " + "-"*50)
 
-pml_thickness = 10
-source_z = pml_thickness + 5       # 在PML後面一點
-det_z_R = fdtd.to_grid(fdtd.um(1.5), grid_spacing)  # 結構前面
-start_z = fdtd.to_grid(fdtd.um(2), grid_spacing)     # 結構開始
-end_z = fdtd.to_grid(fdtd.um(3), grid_spacing)       # 結構結束
-det_z_T = fdtd.to_grid(fdtd.um(4.5), grid_spacing)  # 結構後面
+# 檢查網格配置
+print(f"   網格形狀: {grid.shape}")
+print(f"   force_complex: {getattr(grid, 'force_complex', False)}")
 
-print(f"📍 位置設定:")
-print(f"   Source: z = {source_z} ({source_z * grid_spacing * 1e6:.2f} μm)")
-print(f"   反射探測器: z = {det_z_R} ({det_z_R * grid_spacing * 1e6:.2f} μm)")
-print(f"   結構: z = {start_z}-{end_z} ({start_z * grid_spacing * 1e6:.2f}-{end_z * grid_spacing * 1e6:.2f} μm)")
-print(f"   穿透探測器: z = {det_z_T} ({det_z_T * grid_spacing * 1e6:.2f} μm)")
+# 檢查邊界條件類型
+boundary_types = []
+for boundary in grid.boundaries:
+    boundary_types.append(type(boundary).__name__)
+print(f"   邊界類型: {boundary_types}")
 
-# ==== make_grid 函式封裝 ====
+# === 2. 週期邊界實現檢查 ===
+print(f"\n2. 週期邊界實現檢查：")
 
-def make_grid(with_structure=True):
-    """創建FDTD網格"""
-    grid = fdtd.Grid(
-    shape=(Nx, 1, Nz),
-    grid_spacing=grid_spacing,
-    permittivity=1.0,
-    force_complex=True  # 🔧 確保複數支援
-    )
+has_bloch = any('Bloch' in str(type(b)) for b in grid.boundaries)
+has_periodic = any('Periodic' in str(type(b)) for b in grid.boundaries)
 
-    # 邊界條件
-    grid[0, :, :] = fdtd.BlochBoundary(k_component=kx, length=Lx)
-    grid[:, :, :pml_thickness] = fdtd.PML(name="pml_low")
-    grid[:, :, -pml_thickness:] = fdtd.PML(name="pml_high")
+print(f"   有Bloch邊界: {has_bloch}")
+print(f"   有Periodic邊界: {has_periodic}")
 
-    # 源設定
-    grid[:, 0, source_z] = fdtd.ComplexPlaneWave(
-        wavelength=wavelength,
-        period=wavelength / 3e8,
-        amplitude=1.0 + 0j,
-        theta_deg=theta_deg,
-        polarization_axis="x",
-        pulse=False,
-        name="source"
-    )
+if has_bloch:
+    for b in grid.boundaries:
+        if 'Bloch' in str(type(b)):
+            print(f"   Bloch參數: k_component={getattr(b, 'k_component', 'N/A')}")
+            print(f"              length={getattr(b, 'length', 'N/A')}")
+            print(f"              phase={getattr(b, 'phase', 'N/A')}")
 
-    # 🔧 修正後的探測器設定
-    grid[:, 0, det_z_T] = fdtd.LineDetector(name="T", flip_sign=False)  # 穿透
-    grid[:, 0, det_z_R] = fdtd.LineDetector(name="R", flip_sign=True)   # 反射
+# === 3. 源實現檢查 ===
+print(f"\n3. 源實現檢查：")
 
-    simfolder = None
-    if with_structure:
-        # 結構設定
-        grid[:, 0, start_z:end_z] = fdtd.Object(n=1.5, k=0, name="structure")
-        simfolder = grid.save_simulation("test_bloch_xz")
-        
-        print(f"✅ 添加結構：n=1.5, 厚度={(end_z-start_z)*grid_spacing*1e6:.2f}μm")
+for i, src in enumerate(grid.sources):
+    src_type = type(src).__name__
+    print(f"   源{i}: {src_type}")
+    
+    if hasattr(src, 'theta_deg'):
+        print(f"         入射角: {src.theta_deg}°")
+    if hasattr(src, 'wavelength'):
+        print(f"         波長: {src.wavelength*1e9:.0f} nm")
+    if hasattr(src, 'polarization_axis'):
+        print(f"         極化: {src.polarization_axis}")
 
-    return grid, simfolder
+# === 4. 關鍵差異識別 ===
+print(f"\n4. 與MATLAB第14章的關鍵差異：")
+print("   " + "-"*50)
 
-def calculate_source_power(grid):
-    """計算入射源功率"""
-    source = grid.source
-    source_length = len(getattr(source, 'x', [1])) * grid_spacing
+issues = []
 
+# 差異1: 源類型
+matlab_uses_pbc_source = True  # MATLAB用特殊的PBC源
+python_uses_complex_plane_wave = any('ComplexPlaneWave' in str(type(s)) for s in grid.sources)
 
-    # 自由空間阻抗和振幅
-    Z0 = 377.0  # Ω
-    E0 = abs(source.amplitude)
+if not python_uses_complex_plane_wave:
+    issues.append("❌ 未使用複數平面波源")
+    print("   ❌ 源類型差異:")
+    print("      MATLAB: 使用PBC特殊源（相位修正）")
+    print("      您的實現: 使用標準源")
+else:
+    print("   ✅ 使用複數平面波源")
 
-    # 功率密度和總功率
-    power_density = 0.5 * E0 ** 2 / Z0
-    P_incident = power_density * source_length
+# 差異2: 場更新方程
+if not has_bloch and not has_periodic:
+    issues.append("❌ 缺少週期邊界條件")
+    print("   ❌ 邊界條件差異:")
+    print("      MATLAB: 專門的PBC更新方程")
+    print("      您的實現: 標準邊界條件")
 
-    print(f"📊 源功率計算:")
-    print(f"   振幅: {E0:.3f} V/m")
-    print(f"   源長度: {source_length*1e6:.2f} μm")
-    print(f"   入射功率: {P_incident:.6e} W/m")
+# 差異3: 複數場處理
+E_is_complex = np.iscomplexobj(grid.E)
+H_is_complex = np.iscomplexobj(grid.H)
 
-    return P_incident
+if not (E_is_complex and H_is_complex):
+    issues.append("❌ 場不是複數類型")
+    print("   ❌ 場類型差異:")
+    print("      MATLAB: 所有場都是複數")
+    print(f"      您的實現: E複數={E_is_complex}, H複數={H_is_complex}")
+else:
+    print("   ✅ 場為複數類型")
 
+# === 5. 檢測器實現檢查 ===
+print(f"\n5. 檢測器實現檢查：")
 
-def analyze_results(grid, P_incident, stabilization_steps=10):
-    """分析穿透反射結果"""
-    print(f"\n📊 結果分析:")
+for i, det in enumerate(grid.detectors):
+    det_type = type(det).__name__
+    print(f"   檢測器{i}: {det_type}")
+    
+    # 檢查是否有相位修正
+    has_phase_correction = hasattr(det, 'phase_correction') or hasattr(det, 'spatial_phase')
+    print(f"             相位修正: {has_phase_correction}")
+    
+    if not has_phase_correction:
+        issues.append(f"❌ 檢測器{i}缺少相位修正")
 
-    # 檢查數據長度
-    T_data = np.array(grid.T.S)
-    R_data = np.array(grid.R.S)
+# === 6. 提出修正建議 ===
+print(f"\n6. 修正建議：")
+print("   " + "="*50)
 
-    print(f"   數據長度: T={len(T_data)}, R={len(R_data)}")
+if issues:
+    print("   🔧 需要修正的問題：")
+    for issue in issues:
+        print(f"      {issue}")
+    
+    print(f"\n   💡 具體修正步驟：")
+    
+    if "❌ 未使用複數平面波源" in str(issues):
+        print("      1. 確保使用ComplexPlaneWave源")
+        print("         - 設定適當的theta_deg參數")
+        print("         - 確保amplitude為複數")
+    
+    if "❌ 缺少週期邊界條件" in str(issues):
+        print("      2. 添加正確的週期邊界條件：")
+        print("         - 使用BlochBoundary而非普通PML")
+        print("         - 設定正確的k_component參數")
+    
+    if "❌ 場不是複數類型" in str(issues):
+        print("      3. 確保複數場處理：")
+        print("         - Grid初始化時設定force_complex=True")
+        print("         - 調用grid.promote_dtypes_to_complex()")
+    
+    if any("檢測器" in issue for issue in issues):
+        print("      4. 修正檢測器實現：")
+        print("         - 添加相位修正計算")
+        print("         - 使用複數Poynting向量計算")
 
-    if len(T_data) < stabilization_steps:
-        print(f"⚠️ 警告：數據長度不足，使用全部數據")
-        T_avg = np.mean(T_data)
-        R_avg = np.mean(R_data)
+else:
+    print("   ✅ 基本配置看起來正確")
+    print("   🔍 可能的問題在於數值實現細節")
+
+return issues
+```
+
+def compare_with_analytical_solution():
+“””
+與解析解對比，驗證計算正確性
+“””
+print(f”\n7. 解析解對比：”)
+print(”   “ + “=”*30)
+
+```
+# Fresnel公式（垂直入射）
+n1, n2 = 1.0, 1.5  # 空氣 → 介電質
+
+# 反射係數
+r = (n1 - n2) / (n1 + n2)
+R_theory = abs(r)**2
+
+# 穿透係數
+t = 2*n1 / (n1 + n2)
+T_theory = abs(t)**2 * n2/n1  # 考慮折射率差異
+
+print(f"   理論值（垂直入射）：")
+print(f"   反射率 R = {R_theory:.4f} ({R_theory*100:.1f}%)")
+print(f"   穿透率 T = {T_theory:.4f} ({T_theory*100:.1f}%)")
+print(f"   總和 R+T = {R_theory + T_theory:.4f}")
+
+return R_theory, T_theory
+```
+
+def suggest_matlab_style_implementation():
+“””
+建議符合MATLAB第14章風格的實現
+“””
+print(f”\n8. MATLAB風格實現建議：”)
+print(”   “ + “=”*40)
+
+```
+print("""
+```
+
+🎯 關鍵實現要點：
+
+1. 源設定（參照Listing 14.3）：
+   
+   ```python
+   # 設定水平波數
+   kx = 100  # radian/meter
+   ky = 0    # radian/meter
+   
+   # 計算最小頻率
+   f_min = c * sqrt(kx^2 + ky^2) / (2*pi)
+   
+   # 設定調制高斯波形
+   source = ComplexPlaneWave(
+       wavelength=wavelength,
+       theta_deg=theta_deg,  # 由kx/ky計算得出
+       amplitude=1.0+0j,
+       pulse=False
+   )
+   ```
+1. 邊界條件（參照Section 14.2）：
+   
+   ```python
+   # x方向週期邊界
+   grid[0, :, :] = BlochBoundary(k_component=kx, length=Lx)
+   
+   # z方向吸收邊界
+   grid[:, :, :pml_thick] = PML()
+   grid[:, :, -pml_thick:] = PML()
+   ```
+1. 場更新（參照Equations 14.9-14.20）：
+- 所有場都必須是複數
+- 邊界更新包含相位因子 exp(±j*k*P)
+- 檢測器需要相位修正
+1. 檢測器（參照Section 14.4）：
+   
+   ```python
+   # 相位修正（參照Equation 14.29）
+   phase_correction = exp(-j*kx*(i-0.5)*dx - j*ky*(j-1)*dy)
+   E_corrected = E_raw * phase_correction
+   
+   # 計算反射/穿透係數
+   E_total = average(E_corrected)
+   E_incident = (E_total + eta0*H_total*k/kz) / 2
+   E_reflected = E_total - E_incident
+   Gamma = E_reflected / E_incident
+   ```
+
+“””)
+
+def run_complete_diagnosis(grid, grid_spacing):
+“””
+運行完整診斷
+“””
+# 1. 基本診斷
+issues = diagnose_pbc_implementation(grid, grid_spacing)
+
+```
+# 2. 解析解對比
+R_theory, T_theory = compare_with_analytical_solution()
+
+# 3. 實現建議
+suggest_matlab_style_implementation()
+
+# 4. 總結
+print(f"\n🎯 診斷總結：")
+print("="*50)
+
+if len(issues) == 0:
+    print("✅ 配置基本正確，問題可能在數值實現細節")
+    print("🔍 建議檢查：場更新方程、相位修正、功率計算")
+elif len(issues) <= 2:
+    print("⚠️ 有少數問題需要修正")
+    print("🔧 修正後應該能得到正確結果")
+else:
+    print("❌ 發現多個關鍵問題")
+    print("🚨 需要重新實現關鍵部分")
+
+print(f"\n最重要的修正優先級：")
+print("1. 確保使用複數場和週期邊界條件")
+print("2. 實現正確的相位修正")
+print("3. 驗證功率計算公式")
+
+return issues, R_theory, T_theory
+```
+
+# === 簡化版診斷函數（直接可用） ===
+
+def quick_diagnosis(grid, grid_spacing):
+“””
+快速診斷您現有的FDTD設定
+“””
+print(“🚨 快速FDTD診斷”)
+print(”=”*50)
+
+```
+# 1. 基本資訊
+print(f"1. 基本配置:")
+print(f"   網格形狀: {grid.shape}")
+print(f"   Grid spacing: {grid_spacing*1e9:.1f} nm")
+print(f"   Time step: {grid.time_step:.2e} s")
+
+# 2. 場類型檢查
+E_complex = 'complex' in str(grid.E.dtype)
+H_complex = 'complex' in str(grid.H.dtype)
+print(f"\n2. 場數據類型:")
+print(f"   E場複數: {E_complex}")
+print(f"   H場複數: {H_complex}")
+
+# 3. 邊界條件
+print(f"\n3. 邊界條件:")
+for i, boundary in enumerate(grid.boundaries):
+    btype = type(boundary).__name__
+    print(f"   邊界{i}: {btype}")
+    if 'Bloch' in btype:
+        print(f"           k_component: {getattr(boundary, 'k_component', 'N/A')}")
+        print(f"           length: {getattr(boundary, 'length', 'N/A')}")
+
+# 4. 源檢查
+print(f"\n4. 源配置:")
+for i, source in enumerate(grid.sources):
+    stype = type(source).__name__
+    print(f"   源{i}: {stype}")
+    if hasattr(source, 'theta_deg'):
+        print(f"         角度: {source.theta_deg}°")
+    if hasattr(source, 'amplitude'):
+        print(f"         振幅: {source.amplitude}")
+
+# 5. 檢測器
+print(f"\n5. 檢測器:")
+for i, detector in enumerate(grid.detectors):
+    dtype = type(detector).__name__
+    print(f"   檢測器{i}: {dtype}")
+    if hasattr(detector, 'flip_sign'):
+        print(f"            反向: {detector.flip_sign}")
+
+# 6. 場數值檢查
+E_max = float(np.max(np.abs(grid.E)))
+H_max = float(np.max(np.abs(grid.H)))
+print(f"\n6. 場強度:")
+print(f"   |E|_max: {E_max:.3e}")
+print(f"   |H|_max: {H_max:.3e}")
+
+if H_max > 1e-15:
+    impedance = E_max / H_max
+    print(f"   實際阻抗: {impedance:.1f} Ω")
+    print(f"   理論阻抗: 377 Ω")
+    if abs(impedance - 377) > 100:
+        print("   ❌ 阻抗嚴重偏離！")
     else:
-        # 使用最後stabilization_steps個數據點
-        T_avg = np.mean(T_data[-stabilization_steps:])
-        R_avg = np.mean(R_data[-stabilization_steps:])
+        print("   ✅ 阻抗合理")
+else:
+    print("   ❌ H場為零！")
 
-    # 計算穿透反射率
-    T_ratio = T_avg / P_incident if P_incident != 0 else 0
-    R_ratio = abs(R_avg) / P_incident if P_incident != 0 else 0  # 反射取絕對值
-    A_ratio = 1 - T_ratio - R_ratio  # 吸收率
+# 7. 主要問題識別
+print(f"\n🎯 主要問題:")
+issues = []
 
-    print(f"   原始功率: T={T_avg:.6e}, R={R_avg:.6e}")
-    print(f"   穿透率: T = {T_ratio:.3f} ({T_ratio*100:.1f}%)")
-    print(f"   反射率: R = {R_ratio:.3f} ({R_ratio*100:.1f}%)")
+if not (E_complex and H_complex):
+    issues.append("❌ 場不是複數類型")
 
-    return {
-        'T': T_ratio,
-        'R': R_ratio, 
-        'T_raw': T_avg,
-        'R_raw': R_avg,
-        'P_incident': P_incident
-    }
+if not any('Bloch' in type(b).__name__ for b in grid.boundaries):
+    issues.append("❌ 缺少BlochBoundary")
 
+if H_max < 1e-15:
+    issues.append("❌ 磁場為零")
+elif abs(E_max/H_max - 377) > 100:
+    issues.append("❌ 阻抗異常")
 
-def run_simulation(with_structure=True, total_steps=500, animation_interval=10):
-    """運行完整模擬"""
-    print(f"\n🚀 開始模擬 ({'有結構' if with_structure else '無結構'})")
-    print("=" * 60)
+if len(issues) == 0:
+    print("   ✅ 基本配置正確")
+else:
+    for issue in issues:
+        print(f"   {issue}")
 
-    # 創建網格
-    grid, simfolder = make_grid(with_structure=with_structure)
+return issues
+```
 
-    # 計算源功率
-    P_incident = calculate_source_power(grid)
+# 使用示例
 
-    # 運行模擬
-    print(f"\n⚡ 執行 {total_steps} 個時間步...")
-    simulation_start = time.time()
+def example_usage():
+“””
+在您的test_bloch_PW_xz4.py中添加這幾行：
+“””
+print(”\n” + “=”*60)
+print(“📋 使用方法：”)
+print(“在您的代碼中添加以下內容：”)
+print(”””
 
-    for t in range(total_steps):
-        grid.step()
-        
-        # 動畫顯示（可選）
-        if simfolder and t % animation_interval == 0:
-            try:
-                fig = grid.visualize(
-                    y=0, 
-                    animate=True, 
-                    index=t, 
-                    save=True, 
-                    folder=simfolder, 
-                    real_field_mode=True, 
-                    real_component="Ex"
-                )
-                plt.title(f"t = {t} / {total_steps}")
-                ax = plt.gca()
-                ax.set_xlabel("x (μm)")
-                ax.set_ylabel("z (μm)")
-                plt.tight_layout()
-                clear_output(wait=True)
-            except Exception as e:
-                print(f"⚠️ 可視化錯誤: {e}")
-        
-        # # 進度顯示
-        # if t % 50 == 0:
-        #     elapsed = time.time() - simulation_start
-        #     if t > 0:
-        #         eta = elapsed * (total_steps - t) / t
-        #         print(f"   進度: {t:3d}/{total_steps} ({t/total_steps*100:5.1f}%) - 已用{elapsed:.1f}s, 剩餘{eta:.1f}s")
+# 在模擬運行後添加診斷
 
-    simulation_time = time.time() - simulation_start
-    print(f"✅ 模擬完成！耗時: {simulation_time:.1f} 秒")
+if **name** == “**main**”:
+try:
+results, grid = run_simulation(with_structure=True, total_steps=600)
 
-    # 分析結果
-    results = analyze_results(grid, P_incident)
+```
+    # 🔍 添加診斷
+    issues = quick_diagnosis(grid, grid_spacing)
+    
+    # 如果有問題，先修正再繼續分析
+    if issues:
+        print("⚠️ 發現問題，需要修正！")
+    else:
+        # 繼續您的原始分析
+        P_incident = grid.source.get_source_power(grid_spacing=grid_spacing)
+        # ...
+except Exception as e:
+    print(f"錯誤: {e}")
+""")
+```
 
-    return results
+# 如果直接運行此檔案
 
-
-# ==== 主程式執行 ====
-
-if __name__ == "__main__":
-    try:
-        results = run_simulation(with_structure=True, total_steps=800)
-        print(f"\n📋 最終結果:")
-        print(f"   穿透率: T = {results['T']:.3f} ({results['T']*100:.1f}%)")
-        print(f"   反射率: R = {results['R']:.3f} ({results['R']*100:.1f}%)")
-        
-        # 🔧 理論比較（Fresnel公式）
-        n1, n2 = 1.0, 1.5  # 真空 → 介電材料
-        r_theory = ((n1 - n2) / (n1 + n2)) ** 2
-        t_theory = 4*n1*n2 / (n1 + n2) ** 2
-        
-        print(f"\n🧮 理論比較（Fresnel公式）:")
-        print(f"   理論反射率: R = {r_theory:.3f}")
-        print(f"   理論穿透率: T = {t_theory:.3f}")
-        print(f"   差異: ΔR = {abs(results['R'] - r_theory):.3f}, ΔT = {abs(results['T'] - t_theory):.3f}")
-
-    except Exception as e:
-        print(f"\n💥 程式執行錯誤: {e}")
-        import traceback
-        traceback.print_exc()
-
-    finally:
-        print(f"\n✅ 程式執行完成")
+if **name** == “**main**”:
+print(“FDTD週期邊界條件診斷工具”)
+example_usage()
