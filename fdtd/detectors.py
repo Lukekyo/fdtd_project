@@ -30,7 +30,7 @@ class LineDetector:
         self.grid = None
         self.E = []
         self.H = []
-        self.S = []  # Stores the Poynting flux
+        self.S = []  # Poynting flux
         self.name = name
         self.flip_sign = flip_sign
         self.direction_idx = direction_idx  # Index for the propagation direction (default is Z)
@@ -132,105 +132,72 @@ class LineDetector:
         # 取得 E 和 H 的場值，形狀為 (N_line, 3)
         E = bd.array(self.grid.E[self.x, self.y, self.z])
         H = bd.array(self.grid.H[self.x, self.y, self.z])
-
-        # 物理常數
-        mu0 = 4e-7 * bd.pi  # 磁導率 [H/m]
-        
-        # 計算逐點 Poynting 向量
+                
         if len(E.shape) > 1 and E.shape[1] == 3:
-            # 完整的向量叉積
-            S_vec = bd.real(bd.cross(E, bd.conj(H))) / mu0  # [W/m²]
-            
+            # 計算坡印廷矢量
+            # S_vec = bd.real(bd.cross(E, bd.conj(H))) / bd.mu0 # H -> B/μ₀
+            S_vec = bd.real(bd.cross(E, bd.conj(H)))
             # 提取z方向分量（傳播方向）
-            S_z_array = S_vec[:, self.direction_idx]  # 通常direction_idx=2
+            S_z_array = S_vec[:, self.direction_idx]
+            
+            # 根據探測器類型處理
+            if self.flip_sign:  # 反射探測器
+                # 只統計向後流動的功率
+                backward_flow = bd.where(S_z_array < 0, -S_z_array, 0)
+                S_total = bd.sum(backward_flow) * self.grid.grid_spacing         
+            else:  # 穿透探測器
+                # 只統計向前流動的功率
+                forward_flow = bd.where(S_z_array > 0, S_z_array, 0)
+                S_total = bd.sum(forward_flow) * self.grid.grid_spacing
         else:
-            # 如果維度不對，需要調試
-            print(f"WARNING: E shape = {E.shape}, H shape = {H.shape}")
-            S_z_array = bd.zeros(len(self.x))
-    
-        # 【關鍵修正】：正確的空間積分
-        grid_spacing = self.grid.grid_spacing
-        
-        # 對於2D模擬，每個格點代表grid_spacing的長度
-        # 總功率流 = Σ(功率密度) × grid_spacing
-        S_total = bd.sum(S_z_array) * grid_spacing  # [W/m]
-        
-        # 處理反射檢測器的符號
-        if self.flip_sign:
-            S_total  = -S_total 
-        
-        # print(f"DEBUG detect_S ({self.name}):")
-        # print(f"   E real: [{bd.max(bd.real(E)):.2e}] V/m")
-        # print(f"   H real: [{bd.max(bd.real(H)):.2e}] A/m")
-        # print(f"   S_z range: [{bd.min(S_z_array):.2e}, {bd.max(S_z_array):.2e}] W/m²")
-        # print(f"   格點數: {len(S_z_array)}")
-        # print(f"   grid_spacing: {grid_spacing:.2e} m")
-        # print(f"   S_total: {S_total:.6e} W/m")
-        
+            print("WARNING: 場數據維度不符合預期")
+            S_total = 0
+
         self.S.append(S_total)
 
     def get_power_flow(self, steady_steps=20):
         """
-        從Poynting向量時間序列計算功率流（修正版）
-        
         Args:
             steady_steps: 穩態平均的步數
-        
         Returns:
             float: 功率流 [W/m] (2D) 或 [W] (3D)
         """
         if len(self.S) == 0:
-            print(f"⚠️ 檢測器 {self.name} 沒有數據")
+            print(f"   檢測器 {self.name} 沒有數據")
             return None
         
         # 確定穩態範圍
         total_steps = len(self.S)
         if total_steps < steady_steps:
             steady_steps = total_steps
-            print(f"⚠️ 檢測器 {self.name}: 總步數({total_steps}) < 穩態步數，使用全部數據")
+            print(f"   檢測器 {self.name}: 總步數({total_steps}) < 穩態步數，使用全部數據")
         
         # 取最後幾步的Poynting向量進行平均
         steady_data = self.S[-steady_steps:]
         
-        print(f"📊 檢測器 '{self.name}' 功率流分析:")
+        print(f"   檢測器 '{self.name}' 功率流分析:")
         print(f"   分析步數: {steady_steps}")
-        print(f"   原始數據: {[f'{x:.2e}' for x in steady_data[-5:]]}")  # 顯示最後5個值
-    
-        # 計算平均功率流
-        # 注意：detector.S 現在已經是正確單位的功率流了
+        print(f"   原始數據: {[f'{x:.2e}' for x in steady_data[-steady_steps:]]}")  # 顯示最後5個值
+
         if self.flip_sign:
             # 反射檢測器：由於已經在detect_S中處理符號，這裡取絕對值
             power_flow = bd.mean(bd.abs(steady_data))
         else:
             # 穿透檢測器：取實部
             power_flow = bd.mean(bd.real(steady_data))
-        
         print(f"   平均功率流: {power_flow:.6e} W/m")
-        
         return power_flow
 
-
-    def __repr__(self):
-        return f"{self.__class__.__name__}(name={repr(self.name)})"
-
-    def __str__(self):
-        s = "    " + repr(self) + "\n"
-        x = f"[{self.x[0]}, ... , {self.x[-1]}]"
-        y = f"[{self.y[0]}, ... , {self.y[-1]}]"
-        z = f"[{self.z[0]}, ... , {self.z[-1]}]"
-        s += f"        @ x={x}, y={y}, z={z}\n"
-        return s
-
     def detector_values(self):
-        """ 修正的detector_values方法 """
         E_array = bd.array(self.E)  # 將 self.E 轉換為陣列
         H_array = bd.array(self.H)  # 將 self.H 轉換為陣列
-        S_array = bd.array(self.S)  # 將 self.S 轉換為陣列 - 這是標量時間序列
+        S_array = bd.array(self.S)  # 將 self.S 轉換為陣列
 
         result = {
             "E": E_array,
             "H": H_array,
-            "S": S_array  # 標量功率流時間序列
+            "S": S_array,  # 標量功率流時間序列
+            "power_flow": self.get_power_flow()  # 平均功率流
         }
     
         # 只有在陣列有足夠維度時才添加分量
@@ -247,10 +214,20 @@ class LineDetector:
                 "Hy": H_array[..., 1],
                 "Hz": H_array[..., 2],
             })
-        # 移除錯誤的 Sx, Sy, Sz，因為 S_array 是標量
-        # 如果需要向量坡印廷數據，需要在 detect_S() 中額外儲存
 
         return result
+
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(name={repr(self.name)})"
+
+    def __str__(self):
+        s = "    " + repr(self) + "\n"
+        x = f"[{self.x[0]}, ... , {self.x[-1]}]"
+        y = f"[{self.y[0]}, ... , {self.y[-1]}]"
+        z = f"[{self.z[0]}, ... , {self.z[-1]}]"
+        s += f"        @ x={x}, y={y}, z={z}\n"
+        return s
 
 # is the "detector" paradigm necessary? Can we just flag a segment of the base mesh to be
 # stored per timestep?

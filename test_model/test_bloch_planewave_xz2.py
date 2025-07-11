@@ -55,8 +55,8 @@ def make_grid(with_structure=True):
     return grid, simfolder
 
 # ==== Step 1: Reference Run ====
-ref_result = fdtd.reference_run(grid_factory=make_grid, total_steps=500)
-print(f"Reference Transmission: {ref_result['T']:.3e}, Reflection: {ref_result['R']:.3e}")
+# ref_result = fdtd.reference_run(grid_factory=make_grid, total_steps=500)
+# print(f"Reference Transmission: {ref_result['T']:.3e}, Reflection: {ref_result['R']:.3e}")
 
 # ==== Step 2: 真實模擬 ====
 grid, simfolder = make_grid(with_structure=True)

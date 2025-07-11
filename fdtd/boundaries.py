@@ -220,20 +220,15 @@ class _PeriodicBoundaryZ(PeriodicBoundary):
 ## Bloch Periodic Boundaries
 class BlochBoundary(Boundary):
     """ An FDTD Bloch Boundary
-
     Note:
         Like PeriodicBoundary, but with a complex Bloch phase factor.
-        Will be cast to _BlochBoundaryX, _BlochBoundaryY, or _BlochBoundaryZ
-        depending on registration axis.
+        Will be cast to _BlochBoundaryX, _BlochBoundaryY, or _BlochBoundaryZ depending on registration axis.
     """
     def __init__(self, k_component: float, length: float, name: str = None):
         super().__init__(name=name)
         self.k_component = k_component
         self.length = length
         self.phase = bd.exp(1j * k_component * length)
-
-        # 用於偵錯
-        print(f"Bloch boundary: k={k_component:.6f}, L={length:.6f}, phase={self.phase}")
 
     def _register_grid(
             self, grid: Grid, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice
@@ -243,12 +238,6 @@ class BlochBoundary(Boundary):
         # 強制轉 complex，避免 ComplexWarning
         grid.E = bd.array(grid.E, dtype=bd.complex)
         grid.H = bd.array(grid.H, dtype=bd.complex)
-
-        # 材料參數也需要轉換
-        if hasattr(grid, 'inverse_permittivity'):
-            grid.inverse_permittivity = bd.array(grid.inverse_permittivity, dtype=bd.complex)
-        if hasattr(grid, 'inverse_permeability'):
-            grid.inverse_permeability = bd.array(grid.inverse_permeability, dtype=bd.complex)
 
         if self.x == 0 or self.x == -1:
             self.__class__ = _BlochBoundaryX # subclass of BlochBoundary
@@ -278,8 +267,10 @@ class BlochBoundary(Boundary):
 # Bloch Boundaries in the X-direction
 class _BlochBoundaryX(BlochBoundary):
     def update_E(self):
-        self.grid.E[0, :, :, :] = self.grid.E[-2, :, :, :] * self.phase
-        self.grid.E[-1, :, :, :] = self.grid.E[1, :, :, :] * bd.conj(self.phase)
+        # 左邊界網格 = 右邊物理最後一個網格 × phase
+        self.grid.E[0, :, :, :] = self.grid.E[-2, :, :, :] * self.phase # E(x=0) = E(x=L-Δx) × e^(jkL)
+        # 右邊界網格 = 左邊物理第一個網格 × conj(phase) 
+        self.grid.E[-1, :, :, :] = self.grid.E[1, :, :, :] * bd.conj(self.phase) #E(x=L) = E(x=Δx) × e^(-jkL)
 
     def update_H(self):
         self.grid.H[0, :, :, :] = self.grid.H[-2, :, :, :] * self.phase
@@ -511,7 +502,7 @@ class PML(Boundary):
             this method is called *after* the electric field is updated
         """
         self.grid.E[self.loc] += (
-            self.grid.courant_number / self.grid_spacing
+            self.grid.courant_number
             * self.grid.inverse_permittivity[self.loc]
             * self.phi_E
         )
@@ -523,7 +514,7 @@ class PML(Boundary):
             this method is called *after* the magnetic field is updated
         """
         self.grid.H[self.loc] -= (
-            self.grid.courant_number / self.grid_spacing
+            self.grid.courant_number
             * self.grid.inverse_permeability[self.loc]
             * self.phi_H
         )
