@@ -296,8 +296,6 @@ class Grid:
         else:
             self.E += self.courant_number * self.inverse_permittivity * curl
     
-        # self.E += self.courant_number * self.inverse_permittivity * curl
-
         # update objects
         for obj in self.objects:
             obj.update_E(curl)
@@ -323,13 +321,11 @@ class Grid:
 
         curl = curl_E(self.E)
         
-        # ✅ 正確版本 - 兩個分支都不應該有 / self.grid_spacing
         if self.force_complex:
             courant_complex = bd.array(self.courant_number, dtype=bd.complex)
             self.H -= courant_complex * self.inverse_permeability * curl
         else:
-            # ❌ 檢查這行是否還有 / self.grid_spacing
-            self.H -= self.courant_number * self.inverse_permeability * curl  # 移除 / self.grid_spacing
+            self.H -= self.courant_number * self.inverse_permeability * curl
 
         # update objects
         for obj in self.objects:
@@ -372,11 +368,6 @@ class Grid:
         """add an object to the grid"""
         obj._register_grid(self)
         self.objects[name] = obj
-    
-    # def promote_dtypes_to_complex(self):
-    #     self.E = self.E.astype(bd.complex)
-    #     self.H = self.H.astype(bd.complex)
-    #     [boundary.promote_dtypes_to_complex() for boundary in self.boundaries]
     
     def promote_dtypes_to_complex(self):
         """Ensure all relevant arrays are converted to complex dtype."""

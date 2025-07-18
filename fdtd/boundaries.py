@@ -220,11 +220,9 @@ class _PeriodicBoundaryZ(PeriodicBoundary):
 ## Bloch Periodic Boundaries
 class BlochBoundary(Boundary):
     """ An FDTD Bloch Boundary
-
     Note:
         Like PeriodicBoundary, but with a complex Bloch phase factor.
-        Will be cast to _BlochBoundaryX, _BlochBoundaryY, or _BlochBoundaryZ
-        depending on registration axis.
+        Will be cast to _BlochBoundaryX, _BlochBoundaryY, or _BlochBoundaryZ depending on registration axis.
     """
     def __init__(self, k_component: float, length: float, name: str = None):
         super().__init__(name=name)
@@ -269,8 +267,10 @@ class BlochBoundary(Boundary):
 # Bloch Boundaries in the X-direction
 class _BlochBoundaryX(BlochBoundary):
     def update_E(self):
-        self.grid.E[0, :, :, :] = self.grid.E[-2, :, :, :] * self.phase
-        self.grid.E[-1, :, :, :] = self.grid.E[1, :, :, :] * bd.conj(self.phase)
+        # 左邊界網格 = 右邊物理最後一個網格 × phase
+        self.grid.E[0, :, :, :] = self.grid.E[-2, :, :, :] * self.phase # E(x=0) = E(x=L-Δx) × e^(jkL)
+        # 右邊界網格 = 左邊物理第一個網格 × conj(phase) 
+        self.grid.E[-1, :, :, :] = self.grid.E[1, :, :, :] * bd.conj(self.phase) #E(x=L) = E(x=Δx) × e^(-jkL)
 
     def update_H(self):
         self.grid.H[0, :, :, :] = self.grid.H[-2, :, :, :] * self.phase

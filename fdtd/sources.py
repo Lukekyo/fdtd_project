@@ -21,11 +21,6 @@ from .backend import backend as bd
 from .waveforms import *
 from .detectors import CurrentDetector
 
-# relative
-eta0 = 376.73  # 真空阻抗 (Ω)
-n0 = 1.0       # 空氣折射率
-eta0_medium = eta0 / n0  # 本徵阻抗（空氣）
-
 ## PointSource class
 class PointSource:
     """A source placed at a single point (grid cell) in the grid"""
@@ -720,7 +715,6 @@ class ComplexPlaneWave:
         if self.name is not None:
             setattr(grid, self.name, self)
 
-        # === 新增：在處理切片之前分析源類型 ===
         self._analyze_source_geometry(x, y, z, grid)
 
         self.x, self.y, self.z = self._handle_slices(x, y, z)
@@ -865,14 +859,15 @@ class ComplexPlaneWave:
         for xi, zi in zip(self.x, self.z):
             phi_sp = self.spatial_phase[(xi, zi)]
             phase = self.omega * t + self.phase_shift + phi_sp
-            # 加入阻抗
             val = self.amplitude * bd.exp(1j * phase) * env
             self.grid.E[xi, 0, zi, self.pol_index] += val
+    
+    def update_H(self):
+        pass
 
     def get_source_power(self, grid_spacing):
-        """最簡版源功率計算"""
-        Z0 = 377.0
-        Z_medium = Z0 / self.n
+        """功率計算"""
+        Z_medium = bd.eta0 / self.n
         E0 = abs(self.amplitude)
         
         source_length = len(getattr(self, 'x', [1])) * grid_spacing
@@ -882,9 +877,6 @@ class ComplexPlaneWave:
         print(f"🔋 源功率: {P_incident:.6e} W/m (長度: {source_length*1e6:.2f}μm)")
         return P_incident
     
-    
-    def update_H(self):
-        pass
 
     def __repr__(self):
         return (

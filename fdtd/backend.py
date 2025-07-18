@@ -72,6 +72,9 @@ class Backend:
     # constants
     pi = numpy.pi
     c0 = 299_792_458  # 光速 (m/s)
+    mu0 = 4e-7 * pi  # 真空磁導率 (H/m)
+    eps0 = 1.0 / (mu0 * c0**2)  # 真空介電常數 (F/m)
+    eta0 = (mu0 * eps0) ** 0.5  # 真空阻抗 (Ω)
 
     def __repr__(self):
         return self.__class__.__name__
@@ -169,6 +172,12 @@ class NumpyBackend(Backend):
     any = staticmethod(numpy.any)
 
     all = staticmethod(numpy.all)
+
+    rad2deg = staticmethod(numpy.rad2deg)
+    """ convert radians to degrees """
+
+    deg2rad = staticmethod(numpy.deg2rad)
+    """ convert degrees to radians """
 
     @staticmethod
     def bmm(arr1, arr2):
@@ -312,6 +321,10 @@ if TORCH_AVAILABLE:
         any = staticmethod(torch.any)
 
         all = staticmethod(torch.all)
+        
+        rad2deg = staticmethod(torch.rad2deg)
+        
+        deg2rad = staticmethod(torch.deg2rad)
 
         mean = staticmethod(torch.mean)
 

@@ -135,7 +135,12 @@ class LineDetector:
                 
         if len(E.shape) > 1 and E.shape[1] == 3:
             # 計算坡印廷矢量
+<<<<<<< HEAD
             S_vec = bd.real(bd.cross(E, bd.conj(H))) / bd.mu0
+=======
+            # S_vec = bd.real(bd.cross(E, bd.conj(H))) / bd.mu0 # H -> B/μ₀
+            S_vec = bd.real(bd.cross(E, bd.conj(H)))
+>>>>>>> 346fb2094da43e8009f2f503fcad207e428d3bb6
             # 提取z方向分量（傳播方向）
             S_z_array = S_vec[:, self.direction_idx]
             
@@ -156,33 +161,28 @@ class LineDetector:
 
     def get_power_flow(self, steady_steps=20):
         """
-        從Poynting向量時間序列計算功率流（修正版）
-        
         Args:
             steady_steps: 穩態平均的步數
-        
         Returns:
             float: 功率流 [W/m] (2D) 或 [W] (3D)
         """
         if len(self.S) == 0:
-            print(f"⚠️ 檢測器 {self.name} 沒有數據")
+            print(f"   檢測器 {self.name} 沒有數據")
             return None
         
         # 確定穩態範圍
         total_steps = len(self.S)
         if total_steps < steady_steps:
             steady_steps = total_steps
-            print(f"⚠️ 檢測器 {self.name}: 總步數({total_steps}) < 穩態步數，使用全部數據")
+            print(f"   檢測器 {self.name}: 總步數({total_steps}) < 穩態步數，使用全部數據")
         
         # 取最後幾步的Poynting向量進行平均
         steady_data = self.S[-steady_steps:]
         
-        print(f"📊 檢測器 '{self.name}' 功率流分析:")
+        print(f"   檢測器 '{self.name}' 功率流分析:")
         print(f"   分析步數: {steady_steps}")
-        print(f"   原始數據: {[f'{x:.2e}' for x in steady_data[-5:]]}")  # 顯示最後5個值
-    
-        # 計算平均功率流
-        # 注意：detector.S 現在已經是正確單位的功率流了
+        print(f"   原始數據: {[f'{x:.2e}' for x in steady_data[-steady_steps:]]}")  # 顯示最後5個值
+
         if self.flip_sign:
             # 反射檢測器：由於已經在detect_S中處理符號，這裡取絕對值
             power_flow = bd.mean(bd.abs(steady_data))
@@ -193,16 +193,23 @@ class LineDetector:
         return power_flow
 
     def detector_values(self):
+<<<<<<< HEAD
         """ 修正的detector_values方法，加入power_flow """
+=======
+>>>>>>> 346fb2094da43e8009f2f503fcad207e428d3bb6
         E_array = bd.array(self.E)  # 將 self.E 轉換為陣列
         H_array = bd.array(self.H)  # 將 self.H 轉換為陣列
-        S_array = bd.array(self.S)  # 將 self.S 轉換為陣列 - 這是標量時間序列
+        S_array = bd.array(self.S)  # 將 self.S 轉換為陣列
 
         result = {
             "E": E_array,
             "H": H_array,
             "S": S_array,  # 標量功率流時間序列
+<<<<<<< HEAD
             "power_flow": self.get_power_flow()  # 新增：平均功率流
+=======
+            "power_flow": self.get_power_flow()  # 平均功率流
+>>>>>>> 346fb2094da43e8009f2f503fcad207e428d3bb6
         }
     
         # 只有在陣列有足夠維度時才添加分量
@@ -219,8 +226,6 @@ class LineDetector:
                 "Hy": H_array[..., 1],
                 "Hz": H_array[..., 2],
             })
-        # 移除錯誤的 Sx, Sy, Sz，因為 S_array 是標量
-        # 如果需要向量坡印廷數據，需要在 detect_S() 中額外儲存
 
         return result
 

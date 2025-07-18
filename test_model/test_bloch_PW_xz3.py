@@ -118,7 +118,8 @@ def make_grid(with_structure=True):
     )
     
     # 邊界條件（保持不變）
-    grid[0, :, :] = fdtd.PeriodicBoundary(name="periodic_x")
+    # grid[0, :, :] = fdtd.PeriodicBoundary(name="periodic_x")
+    grid[0, :, :] = fdtd.BlochBoundary(k_component=kx, length=Lx, name="bloch_x")
     grid[:, :, :pml_thickness] = fdtd.PML(name="pml_z_low")
     grid[:, :, -pml_thickness:] = fdtd.PML(name="pml_z_high")
     
@@ -158,6 +159,8 @@ def make_grid(with_structure=True):
         structure_thickness = (structure_end_z - structure_start_z) * grid_spacing * 1e6
         print(f"   結構厚度={structure_thickness:.2f}μm")
         
+        grid[:, 0, start_z:end_z] = fdtd.Object(n=1.5, k=0, name="n=1.5")
+        simfolder = grid.save_simulation("test_bloch_xz")
         if VISUALIZATION_AVAILABLE:
             simfolder = grid.save_simulation("2D_transmission_reflection")
     
