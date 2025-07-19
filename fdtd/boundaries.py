@@ -228,7 +228,7 @@ class BlochBoundary(Boundary):
         super().__init__(name=name)
         self.k_component = k_component
         self.length = length
-        self.phase = bd.exp(1j * k_component * length)
+        self.phase = bd.exp(1j * -k_component * length)
 
     def _register_grid(
             self, grid: Grid, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice

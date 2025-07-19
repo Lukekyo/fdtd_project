@@ -23,6 +23,7 @@ from .typing_ import Tuple, Number, Tensorlike
 
 # relative
 from .backend import backend as bd
+from . import constants as const
 
 ## Functions
 def curl_E(E: Tensorlike) -> Tensorlike:
@@ -134,7 +135,7 @@ class Grid:
             self.courant_number = float(courant_number)
 
         # timestep of the simulation
-        self.time_step = self.courant_number * self.grid_spacing / bd.c0
+        self.time_step = self.courant_number * self.grid_spacing / const.c
 
         # Choose dtype based on force_complex
         field_dtype = bd.complex if force_complex else bd.float
@@ -298,7 +299,7 @@ class Grid:
     
         # update objects
         for obj in self.objects:
-            obj.update_E(curl)
+            obj.update_E(curl)  # 處理σₑE項
 
         # update boundaries: step 2
         for boundary in self.boundaries:
@@ -306,7 +307,7 @@ class Grid:
 
         # add sources to grid:
         for src in self.sources:
-            src.update_E()
+            src.update_E()      # 處理Ji項
 
         # detect electric field
         for det in self.detectors:

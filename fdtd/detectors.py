@@ -135,12 +135,8 @@ class LineDetector:
                 
         if len(E.shape) > 1 and E.shape[1] == 3:
             # 計算坡印廷矢量
-<<<<<<< HEAD
-            S_vec = bd.real(bd.cross(E, bd.conj(H))) / bd.mu0
-=======
             # S_vec = bd.real(bd.cross(E, bd.conj(H))) / bd.mu0 # H -> B/μ₀
             S_vec = bd.real(bd.cross(E, bd.conj(H)))
->>>>>>> 346fb2094da43e8009f2f503fcad207e428d3bb6
             # 提取z方向分量（傳播方向）
             S_z_array = S_vec[:, self.direction_idx]
             
@@ -193,10 +189,6 @@ class LineDetector:
         return power_flow
 
     def detector_values(self):
-<<<<<<< HEAD
-        """ 修正的detector_values方法，加入power_flow """
-=======
->>>>>>> 346fb2094da43e8009f2f503fcad207e428d3bb6
         E_array = bd.array(self.E)  # 將 self.E 轉換為陣列
         H_array = bd.array(self.H)  # 將 self.H 轉換為陣列
         S_array = bd.array(self.S)  # 將 self.S 轉換為陣列
@@ -205,11 +197,7 @@ class LineDetector:
             "E": E_array,
             "H": H_array,
             "S": S_array,  # 標量功率流時間序列
-<<<<<<< HEAD
-            "power_flow": self.get_power_flow()  # 新增：平均功率流
-=======
             "power_flow": self.get_power_flow()  # 平均功率流
->>>>>>> 346fb2094da43e8009f2f503fcad207e428d3bb6
         }
     
         # 只有在陣列有足夠維度時才添加分量

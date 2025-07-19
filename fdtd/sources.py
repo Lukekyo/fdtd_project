@@ -726,7 +726,7 @@ class ComplexPlaneWave:
         kx = k0 * bd.sin(self.theta)
         kz = k0 * bd.cos(self.theta)
         self.spatial_phase = {
-            (xi, zi): - (kx * xi * grid.grid_spacing + kz * zi * grid.grid_spacing)
+            (xi, zi): (kx * xi * grid.grid_spacing + kz * zi * grid.grid_spacing)
             for xi, zi in zip(self.x, self.z)
         }
 
@@ -753,31 +753,6 @@ class ComplexPlaneWave:
         
         print(f"🔍 源幾何分析: X={x_len}, Y={y_len}, Z={z_len}")
         
-        # 確定源類型
-        dimensions = [x_len, y_len, z_len]
-        non_unit_dims = sum(1 for d in dimensions if d > 1)
-        
-        if non_unit_dims == 0:
-            self.source_type = "point"
-        elif non_unit_dims == 1:
-            if x_len > 1:
-                self.source_type = "x_line"
-            elif y_len > 1:
-                self.source_type = "y_line"
-            else:
-                self.source_type = "z_line"
-        elif non_unit_dims == 2:
-            if x_len > 1 and y_len > 1:
-                self.source_type = "xy_plane"
-            elif x_len > 1 and z_len > 1:
-                self.source_type = "xz_plane"
-            else:
-                self.source_type = "yz_plane"
-        else:
-            self.source_type = "volume"
-        
-        print(f"   📍 源類型: {self.source_type}")
-
     def _handle_slices(
         self, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice
     ) -> Tuple[List, List, List]:
@@ -846,20 +821,31 @@ class ComplexPlaneWave:
         z = [v.item() for v in bd.array(bd.linspace(z0, z1, m, endpoint=False), bd.int)]
 
         return x, y, z
-
+    
     def update_E(self):
-        t = self.grid.time_steps_passed * self.grid.time_step
 
+        q = self.grid.time_steps_passed
+        
+        # 計算基本時間相位
+        time_phase = 2 * pi * q / self.period + self.phase_shift
+        
+        # 處理脈衝包絡（直接計算，類似 Floport 風格）
         if self.pulse:
-            t1 = int(2*np.pi / (1/self.period) / (self.hanning_dt/self.cycle))
-            env = hanning(1/self.period, t, self.cycle) if t < t1 else 0
+            t1 = int(2 * pi / (self.frequency * self.hanning_dt / self.cycle))
+            if q < t1:
+                envelope = hanning(self.frequency, q * self.hanning_dt, self.cycle)
+            else:
+                envelope = 0
         else:
-            env = 1
-
+            envelope = 1
+        
+        # 對每個源點進行處理
         for xi, zi in zip(self.x, self.z):
-            phi_sp = self.spatial_phase[(xi, zi)]
-            phase = self.omega * t + self.phase_shift + phi_sp
-            val = self.amplitude * bd.exp(1j * phase) * env
+            phi_spatial = self.spatial_phase[(xi, zi)]
+            total_phase = time_phase + phi_spatial
+            
+            # 直接計算最終場值（類似 Floport 的 vect 方式）
+            val = self.amplitude * bd.exp(1j * total_phase) * envelope
             self.grid.E[xi, 0, zi, self.pol_index] += val
     
     def update_H(self):
