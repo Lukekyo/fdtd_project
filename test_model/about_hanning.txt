@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .chart-container { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .explanation { background: #f0f8ff; padding: 15px; margin: 15px 0; border-left: 4px solid #0066cc; }
+        .code-example { background: #f5f5f5; padding: 10px; border-radius: 5px; margin: 10px 0; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+</head>
+<body>
+
+<h2>🔧 修正版：突變信號 vs 漢寧窗調制信號</h2>
+
+<div class="chart-container">
+<h3>1. 完整的信號對比（修正版）</h3>
+<canvas id="signalComparison" width="800" height="400"></canvas>
+</div>
+
+<div class="explanation">
+<strong>圖表說明：</strong><br>
+• <span style="color: red; font-weight: bold;">紅線</span>：突然開關的信號 - 注意邊界處的突變<br>
+• <span style="color: blue; font-weight: bold;">藍線</span>：漢寧窗調制的信號 - 平滑的淡入淡出<br>
+• <span style="color: green; font-weight: bold;">綠線</span>：漢寧窗包絡函數 - 控制振幅變化<br>
+• <span style="color: orange; font-weight: bold;">橙線</span>：載波信號 - 基本的正弦波
+</div>
+
+<div class="chart-container">
+<h3>2. 頻域對比（模擬）</h3>
+<canvas id="frequencyComparison" width="800" height="300"></canvas>
+</div>
+
+<div class="explanation">
+<strong>頻域差異：</strong><br>
+• 突變信號在頻域中會產生很多旁瓣（side lobes）<br>
+• 漢寧窗調制信號的頻譜更集中，旁瓣較小<br>
+• 這就是為什麼需要平滑包絡的原因
+</div>
+
+<div class="chart-container">
+<h3>3. FDTD中的實際應用</h3>
+<canvas id="fdtdApplication" width="800" height="300"></canvas>
+</div>
+
+<div class="code-example">
+<strong>對應的程式碼：</strong>
+<pre>
+# 突變版本（不推薦）
+if q >= start_time and q <= end_time:
+    signal = amplitude * sin(2*pi*q/period)
+else:
+    signal = 0
+
+# 漢寧窗版本（推薦）
+if q < pulse_duration:
+    envelope = hanning_function(q, pulse_duration)
+    signal = amplitude * sin(2*pi*q/period) * envelope
+else:
+    signal = 0
+</pre>
+</div>
+
+<script>
+// 1. 信號對比圖
+const ctx1 = document.getElementById('signalComparison').getContext('2d');
+
+const timePoints = [];
+const suddenSignal = [];
+const hanningSignal = [];
+const envelope = [];
+const carrier = [];
+
+const totalPoints = 300;
+const pulseStart = 50;
+const pulseEnd = 250;
+const frequency = 0.05; // 載波頻率
+
+for (let i = 0; i <= totalPoints; i++) {
+    timePoints.push(i);
+    
+    // 載波信號
+    const carrierValue = Math.sin(2 * Math.PI * frequency * i);
+    carrier.push(carrierValue);
+    
+    // 突然開關信號
+    let sudden = 0;
+    if (i >= pulseStart && i <= pulseEnd) {
+        sudden = carrierValue;
+    }
+    suddenSignal.push(sudden);
+    
+    // 漢寧窗包絡
+    let env = 0;
+    if (i >= pulseStart && i <= pulseEnd) {
+        const normalized = (i - pulseStart) / (pulseEnd - pulseStart);
+        env = 0.5 * (1 - Math.cos(2 * Math.PI * normalized));
+    }
+    envelope.push(env);
+    
+    // 漢寧窗調制信號
+    const hanning = sudden * env;
+    hanningSignal.push(hanning);
+}
+
+new Chart(ctx1, {
+    type: 'line',
+    data: {
+        labels: timePoints,
+        datasets: [
+            {
+                label: '突然開關信號',
+                data: suddenSignal,
+                borderColor: 'red',
+                backgroundColor: 'rgba(255, 0, 0, 0.1)',
+                fill: false,
+                borderWidth: 2,
+                tension: 0
+            },
+            {
+                label: '漢寧窗調制信號',
+                data: hanningSignal,
+                borderColor: 'blue',
+                backgroundColor: 'rgba(0, 0, 255, 0.1)',
+                fill: false,
+                borderWidth: 2,
+                tension: 0
+            },
+            {
+                label: '漢寧窗包絡',
+                data: envelope,
+                borderColor: 'green',
+                backgroundColor: 'rgba(0, 255, 0, 0.1)',
+                fill: false,
+                borderWidth: 2,
+                tension: 0.2
+            },
+            {
+                label: '載波信號',
+                data: carrier,
+                borderColor: 'orange',
+                backgroundColor: 'rgba(255, 165, 0, 0.1)',
+                fill: false,
+                borderWidth: 1,
+                tension: 0
+            }
+        ]
+    },
+    options: {
+        responsive: false,
+        interaction: {
+            mode: 'index',
+            intersect: false,
+        },
+        scales: {
+            x: {
+                title: {
+                    display: true,
+                    text: '時間步數 (q)'
+                },
+                grid: {
+                    display: true
+                }
+            },
+            y: {
+                title: {
+                    display: true,
+                    text: '振幅'
+                },
+                min: -1.2,
+                max: 1.2
+            }
+        },
+        plugins: {
+            title: {
+                display: true,
+                text: '信號對比：清楚看出漢寧窗的平滑效果'
+            },
+            legend: {
+                display: true,
+                position: 'top'
+            }
+        }
+    }
+});
+
+// 2. 頻域對比（模擬）
+const ctx2 = document.getElementById('frequencyComparison').getContext('2d');
+
+const frequencies = [];
+const suddenSpectrum = [];
+const hanningSpectrum = [];
+
+for (let f = 0; f <= 100; f++) {
+    frequencies.push(f);
+    
+    // 模擬突變信號的頻譜（有很多旁瓣）
+    const centerFreq = 20;
+    let suddenPower = Math.exp(-0.1 * Math.abs(f - centerFreq));
+    
+    // 添加旁瓣
+    if (f !== centerFreq) {
+        suddenPower += 0.3 * Math.exp(-0.05 * Math.abs(f - centerFreq)) * 
+                     Math.abs(Math.sin(0.3 * (f - centerFreq)));
+    }
+    suddenSpectrum.push(suddenPower);
+    
+    // 模擬漢寧窗信號的頻譜（更集中）
+    let hanningPower = Math.exp(-0.2 * Math.abs(f - centerFreq));
+    
+    // 較小的旁瓣
+    if (f !== centerFreq) {
+        hanningPower += 0.1 * Math.exp(-0.1 * Math.abs(f - centerFreq)) * 
+                       Math.abs(Math.sin(0.5 * (f - centerFreq)));
+    }
+    hanningSpectrum.push(hanningPower);
+}
+
+new Chart(ctx2, {
+    type: 'line',
+    data: {
+        labels: frequencies,
+        datasets: [
+            {
+                label: '突變信號頻譜',
+                data: suddenSpectrum,
+                borderColor: 'red',
+                fill: true,
+                backgroundColor: 'rgba(255, 0, 0, 0.3)',
+                tension: 0.1
+            },
+            {
+                label: '漢寧窗信號頻譜',
+                data: hanningSpectrum,
+                borderColor: 'blue',
+                fill: true,
+                backgroundColor: 'rgba(0, 0, 255, 0.3)',
+                tension: 0.1
+            }
+        ]
+    },
+    options: {
+        responsive: false,
+        scales: {
+            x: { title: { display: true, text: '頻率' } },
+            y: { title: { display: true, text: '功率密度' } }
+        },
+        plugins: {
+            title: { display: true, text: '頻域對比：漢寧窗減少了不需要的頻率成分' }
+        }
+    }
+});
+
+// 3. FDTD應用示例
+const ctx3 = document.getElementById('fdtdApplication').getContext('2d');
+
+const fdtdTime = [];
+const pulseSignal = [];
+const continuousSignal = [];
+
+for (let q = 0; q <= 200; q++) {
+    fdtdTime.push(q);
+    
+    // 連續波信號
+    const continuous = Math.sin(2 * Math.PI * q / 25);
+    continuousSignal.push(continuous);
+    
+    // 脈衝信號（5個週期的漢寧窗）
+    let pulse = 0;
+    const cycles = 5;
+    const period = 25;
+    const totalDuration = cycles * period;
+    
+    if (q <= totalDuration) {
+        const env = 0.5 * (1 - Math.cos(2 * Math.PI * q / totalDuration));
+        pulse = Math.sin(2 * Math.PI * q / period) * env;
+    }
+    pulseSignal.push(pulse);
+}
+
+new Chart(ctx3, {
+    type: 'line',
+    data: {
+        labels: fdtdTime,
+        datasets: [
+            {
+                label: '連續波 (CW)',
+                data: continuousSignal,
+                borderColor: 'green',
+                fill: false,
+                borderWidth: 1
+            },
+            {
+                label: '脈衝 (5週期漢寧窗)',
+                data: pulseSignal,
+                borderColor: 'purple',
+                fill: false,
+                borderWidth: 2
+            }
+        ]
+    },
+    options: {
+        responsive: false,
+        scales: {
+            x: { title: { display: true, text: '時間步數 q' } },
+            y: { title: { display: true, text: '源信號振幅' } }
+        },
+        plugins: {
+            title: { display: true, text: 'FDTD中的實際應用：連續波 vs 脈衝' }
+        }
+    }
+});
+</script>
+
+<div class="explanation">
+<h3>🎯 關鍵理解要點：</h3>
+<strong>為什麼需要漢寧窗？</strong><br>
+1. <strong>頻域純淨</strong>：避免突變產生的高頻噪聲<br>
+2. <strong>數值穩定</strong>：平滑變化減少FDTD中的數值震盪<br>
+3. <strong>物理真實</strong>：真實的雷射器不可能瞬間開關<br>
+4. <strong>邊界效應</strong>：減少與PML等邊界條件的交互作用問題<br><br>
+
+<strong>什麼時候使用？</strong><br>
+• ✅ <strong>脈衝源</strong>：需要有限長度的信號時<br>
+• ✅ <strong>頻域分析</strong>：需要乾淨頻譜時<br>
+• ❌ <strong>連續波</strong>：需要穩態信號時不使用包絡<br>
+• ❌ <strong>長時間模擬</strong>：已經達到穩態後不需要
+</div>
+
+</body>
+</html>
