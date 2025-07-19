@@ -499,188 +499,12 @@ class PlaneSource:
         s += f"        @ x={x}, y={y}, z={z}\n"
         return s
 
-# ComplexLineSource class
-class ComplexLineSource:
-    """A source along a line in the FDTD grid"""
-
-    def __init__(
-        self,
-        wavelength: float,
-        period: float,
-        amplitude: complex = 1.0 + 0.0j,
-        phase_shift: float = 0.0,
-        name: str = None,
-        pulse: bool = False,
-        cycle: int = 5,
-        hanning_dt: float = 1.0,
-    ):
-        self.grid = None
-        self.period = period
-        self.wavelength = wavelength
-        self.amplitude = bd.complex(amplitude)
-        self.omega = 2 * np.pi * bd.c0 / wavelength
-        self.phase_shift = phase_shift
-        self.name = name
-        self.pulse = pulse
-        self.cycle = cycle
-        self.hanning_dt = hanning_dt
-
-    def _register_grid(
-        self, grid: Grid, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice
-    ):
-        """Register a grid for the source.
-
-        Args:
-            grid: the grid to place the source into.
-            x: The x-location of the source in the grid
-            y: The y-location of the source in the grid
-            z: The z-location of the source in the grid
-
-        Note:
-            As its name suggests, this source is a LINE source.
-            Hence the source spans the diagonal of the cube
-            defined by the slices in the grid.
-        """
-        self.grid = grid
-        self.grid.sources.append(self)
-        if self.name is not None:
-            if not hasattr(grid, self.name):
-                setattr(grid, self.name, self)
-            else:
-                raise ValueError(
-                    f"The grid already has an attribute with name {self.name}"
-                )
-
-        self.x, self.y, self.z = self._handle_slices(x, y, z) # convert slices to lists
-
-        self.period = grid._handle_time(self.period) # convert to time
-        self.frequency = 1.0 / self.period # convert to frequency
-
-        L = len(self.x) # length of the line
-        vect = bd.array(
-            (bd.array(self.x) - self.x[L // 2]) ** 2
-            + (bd.array(self.y) - self.y[L // 2]) ** 2
-            + (bd.array(self.z) - self.z[L // 2]) ** 2,
-            bd.float,
-        ) # distance from the center of the line, only work for uniform grid
-
-        self.profile = bd.exp(-(vect ** 2) / (2 * (0.5 * vect.max()) ** 2)) # gaussian profile
-        self.profile /= self.profile.sum() # normalize the profile
-        self.profile = bd.array(self.profile, dtype=bd.complex) # ensure complex type
-        self.profile *= self.amplitude # scale the profile to the amplitude
-
-    def _handle_slices(
-        self, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice
-    ) -> Tuple[List, List, List]:
-        """Convert slices in the grid to lists
-
-        This is necessary to make the source span the diagonal of the volume
-        defined by the slices.
-
-        Args:
-            x: The x-location of the volume in the grid
-            y: The y-location of the volume in the grid
-            z: The z-location of the volume in the grid
-
-        Returns:
-            x, y, z: the x, y and z coordinates of the source as lists
-
-        """
-
-        # if list-indices were chosen:
-        if isinstance(x, list) and isinstance(y, list) and isinstance(z, list):
-            if len(x) != len(y) or len(y) != len(z) or len(z) != len(x):
-                raise IndexError(
-                    "sources require grid to be indexed with slices or equal length list-indices"
-                )
-            x = [self.grid._handle_distance(_x) for _x in x]
-            y = [self.grid._handle_distance(_y) for _y in y]
-            z = [self.grid._handle_distance(_z) for _z in z]
-            return x, y, z
-
-        # if a combination of list-indices and slices were chosen,
-        # convert the list-indices to slices.
-        # TODO: maybe issue a warning here?
-        if isinstance(x, list):
-            x = slice(
-                self.grid._handle_distance(x[0]),
-                self.grid._handle_distance(x[-1]),
-                None,
-            )
-        if isinstance(y, list):
-            y = slice(
-                self.grid._handle_distance(y[0]),
-                self.grid._handle_distance(y[-1]),
-                None,
-            )
-        if isinstance(z, list):
-            z = slice(
-                self.grid._handle_distance(z[0]),
-                self.grid._handle_distance(z[-1]),
-                None,
-            )
-
-        # if we get here, we can assume slices:
-        x0 = self.grid._handle_distance(x.start if x.start is not None else 0)
-        y0 = self.grid._handle_distance(y.start if y.start is not None else 0)
-        z0 = self.grid._handle_distance(z.start if z.start is not None else 0)
-        x1 = self.grid._handle_distance(x.stop if x.stop is not None else self.grid.Nx)
-        y1 = self.grid._handle_distance(y.stop if y.stop is not None else self.grid.Ny)
-        z1 = self.grid._handle_distance(z.stop if z.stop is not None else self.grid.Nz)
-
-        # we can now convert these coordinates into index lists
-        m = max(abs(x1 - x0), abs(y1 - y0), abs(z1 - z0))
-        if m < 2:
-            raise ValueError("a LineSource should consist of at least two gridpoints")
-        x = [v.item() for v in bd.array(bd.linspace(x0, x1, m, endpoint=False), bd.int)]
-        y = [v.item() for v in bd.array(bd.linspace(y0, y1, m, endpoint=False), bd.int)]
-        z = [v.item() for v in bd.array(bd.linspace(z0, z1, m, endpoint=False), bd.int)]
-
-        return x, y, z
-
-    def update_E(self):
-        q = self.grid.time_steps_passed * self.grid.time_step  # convert to time
-
-        if self.pulse:
-            t1 = int(2 * pi / (self.frequency * self.hanning_dt / self.cycle))
-            if q < t1:
-                env = hanning(self.frequency, q * self.hanning_dt, self.cycle)
-                vect = self.profile * bd.exp(1j * (self.omega * q + self.phase_shift)) * env
-            else:
-                vect = self.profile * 0
-        else:
-            vect = self.profile * bd.exp(1j * (self.omega * q + self.phase_shift))
-            # vect = bd.real(self.profile * bd.exp(1j * (self.omega * q + self.phase_shift)))
-
-        for x, y, z, value in zip(self.x, self.y, self.z, vect):
-            self.grid.E[x, y, z, 2] += value
-
-
-    def update_H(self):
-        """Add the source to the magnetic field"""
-
-    def __repr__(self):
-        return (
-            f"{self.__class__.__name__}(period={self.period}, "
-            f"amplitude={self.amplitude}, phase_shift={self.phase_shift}, "
-            f"name={repr(self.name)})"
-        )
-
-    def __str__(self):
-        s = "    " + repr(self) + "\n"
-        x = f"[{self.x[0]}, ... , {self.x[-1]}]"
-        y = f"[{self.y[0]}, ... , {self.y[-1]}]"
-        z = f"[{self.z[0]}, ... , {self.z[-1]}]"
-        s += f"        @ x={x}, y={y}, z={z}\n"
-        return s
-
 class ComplexPlaneWave:
     """A 2D plane wave source (Ez polarization)"""
 
     def __init__(
         self,
-        wavelength: float,
-        period: float,
+        wavelength: float,           # 唯一必需的物理參數
         amplitude: complex = 1.0 + 0.0j,
         phase_shift: float = 0.0,
         theta_deg: float = 0.0,
@@ -691,67 +515,70 @@ class ComplexPlaneWave:
         hanning_dt: float = None,
         medium_n: float = None
     ):
-        self.grid = None
+        """
+        創建ComplexPlaneWave，自動從wavelength計算所有頻率參數
+        
+        Args:
+            wavelength: 波長 (m) - 唯一需要的物理參數
+            amplitude: 振幅
+            phase_shift: 相位偏移 (rad)
+            theta_deg: 入射角度 (度)
+            polarization_axis: 偏振軸
+            name: 名稱
+            pulse: 是否為脈衝
+            cycle: 脈衝週期數
+            hanning_dt: 脈衝時間步長（會自動計算）
+            medium_n: 介質折射率
+        """
         self.wavelength = wavelength
-        self.period = period
-        self.frequency = 1.0 / period
-        self.omega = 2 * bd.pi * bd.c0 / wavelength
-        self.amplitude = bd.complex(amplitude)
+        self.amplitude = amplitude  # 假設這裡用complex
         self.phase_shift = phase_shift
+        self.theta_deg = theta_deg
         self.theta = bd.deg2rad(theta_deg)
+        self.polarization_axis = polarization_axis.lower()
         self.name = name
         self.pulse = pulse
         self.cycle = cycle
-        self.hanning_dt = hanning_dt
-        self.polarization_axis = polarization_axis.lower()
         self.n = medium_n if medium_n is not None else 1.0
+        # frequency, period, omega, k in SI units
+        self.frequency = bd.c0 / self.n / wavelength  # Hz
+        self.period = 1.0 / self.frequency  # 秒
+        self.omega = 2 * bd.pi * self.frequency  # rad/s
+        self.k = 2 * np.pi / wavelength  # 1/m
+        # 計算Hanning窗脈衝的時間步長
+        self.hanning_dt = hanning_dt if hanning_dt is not None else 0.5 / self.frequency
+        # 初始化其他屬性
+        self.grid = None
+        self.period_sim = None      # 將在_register_grid中計算
+        self.frequency_sim = None   # 將在_register_grid中計算
+        self.omega_sim = None       # 將在_register_grid中計算
         
-        # === 新增：初始化源類型屬性 ===
-        self.source_type = None  # 將在 _register_grid 中設定
 
     def _register_grid(self, grid: Grid, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice):
         self.grid = grid
         self.grid.sources.append(self)
+        
         if self.name is not None:
+            if hasattr(grid, self.name):
+                raise ValueError(f"The grid already has an attribute with name {self.name}")
             setattr(grid, self.name, self)
 
-        self._analyze_source_geometry(x, y, z, grid)
+        self.x, self.y, self.z = self._handle_slices(x, y, z) # convert slices to lists
 
-        self.x, self.y, self.z = self._handle_slices(x, y, z)
-        if self.hanning_dt is None:
-            self.hanning_dt = grid.time_step
-
+        # period, frequency and omega in simulation time steps
+        self.period_sim = self.period / grid.time_step  # timesteps
+        self.frequency_sim = 1.0 / self.period_sim         # 1/timestep  
+        self.omega_sim = 2 * np.pi / self.period_sim       # rad/timestep
         # === 空間相位設定 計算 kx, kz ===
-        k0 = 2*bd.pi / self.wavelength
-        kx = k0 * bd.sin(self.theta)
-        kz = k0 * bd.cos(self.theta)
+        kx = self.k * bd.sin(self.theta)
+        kz = self.k * bd.cos(self.theta)
+        # 計算每個格點的空間相位
         self.spatial_phase = {
             (xi, zi): (kx * xi * grid.grid_spacing + kz * zi * grid.grid_spacing)
             for xi, zi in zip(self.x, self.z)
         }
 
         self.pol_index = {"x": 0, "y": 1, "z": 2}[self.polarization_axis]
-
-    def _analyze_source_geometry(self, x, y, z, grid):
-        """分析源的幾何配置並設定 source_type"""
-        
-        def get_dimension_info(coord, max_val):
-            """獲取坐標維度資訊"""
-            if isinstance(coord, slice):
-                start = coord.start or 0
-                stop = coord.stop or max_val
-                return stop - start
-            elif isinstance(coord, list):
-                return len(coord)
-            else:  # 單個數值
-                return 1
-        
-        # 分析各維度
-        x_len = get_dimension_info(x, grid.Nx)
-        y_len = get_dimension_info(y, grid.Ny)
-        z_len = get_dimension_info(z, grid.Nz)
-        
-        print(f"🔍 源幾何分析: X={x_len}, Y={y_len}, Z={z_len}")
         
     def _handle_slices(
         self, x: ListOrSlice, y: ListOrSlice, z: ListOrSlice
@@ -826,28 +653,35 @@ class ComplexPlaneWave:
 
         q = self.grid.time_steps_passed
         
-        # 計算基本時間相位
-        time_phase = 2 * pi * q / self.period + self.phase_shift
+        # 時間相位計算（兩種方法等價，選一種）
+        # 方法1：使用模擬頻率
+        time_phase = self.omega_sim * q + self.phase_shift
         
-        # 處理脈衝包絡（直接計算，類似 Floport 風格）
+        # 方法2：使用物理時間（驗證一致性）
+        # t = q * self.grid.time_step
+        # time_phase_check = self.omega * t + self.phase_shift
+        # assert abs(time_phase - time_phase_check) < 1e-10
+        
+        # 脈衝包絡計算（統一使用物理時間）
         if self.pulse:
-            t1 = int(2 * pi / (self.frequency * self.hanning_dt / self.cycle))
-            if q < t1:
-                envelope = hanning(self.frequency, q * self.hanning_dt, self.cycle)
+            t = q * self.grid.time_step  # 當前物理時間
+            t_pulse_duration = 2 * bd.pi * self.cycle / self.omega  # 脈衝持續時間
+            
+            if t < t_pulse_duration:
+                envelope = hanning(self.frequency, t, self.cycle)
             else:
                 envelope = 0
         else:
             envelope = 1
         
-        # 對每個源點進行處理
+        # 更新每個格點的電場
         for xi, zi in zip(self.x, self.z):
-            phi_spatial = self.spatial_phase[(xi, zi)]
-            total_phase = time_phase + phi_spatial
+            spatial_phase = self.spatial_phase[(xi, zi)]
+            total_phase = time_phase + spatial_phase
             
-            # 直接計算最終場值（類似 Floport 的 vect 方式）
-            val = self.amplitude * bd.exp(1j * total_phase) * envelope
-            self.grid.E[xi, 0, zi, self.pol_index] += val
-    
+            field_value = self.amplitude * bd.exp(1j * total_phase) * envelope
+            self.grid.E[xi, 0, zi, self.pol_index] += field_value
+        
     def update_H(self):
         pass
 

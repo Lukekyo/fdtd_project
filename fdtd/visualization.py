@@ -21,26 +21,9 @@ from scipy.signal import hilbert  # TODO: Write hilbert function to replace usin
 # relative
 from .backend import backend as bd
 
-def get_extent(grid, plane: str):
-    dx = grid.grid_spacing  # 單位是 m
-    μm = 1e6
-    if plane == "xy":
-        return [0, grid.Nx * dx * μm, 0, grid.Ny * dx * μm]
-    elif plane == "xz":
-        return [0, grid.Nx * dx * μm, 0, grid.Nz * dx * μm]
-    elif plane == "yz":
-        return [0, grid.Ny * dx * μm, 0, grid.Nz * dx * μm]
-    else:
-        raise ValueError(f"Unsupported plane: {plane}")
 
-def idx_to_um(val, dx):
-    if isinstance(val, (list, tuple)):
-        # if lst is a list or tuple, convert each element
-        return [i * dx * 1e6 for i in val]
-    else:
-        # if lst is a single value, convert it directly
-        return val * dx * 1e6
 # 2D visualization function
+
 
 def visualize(
     grid,
@@ -55,18 +38,15 @@ def visualize(
     srccolor="C0",
     detcolor="C2",
     norm="linear",
-    animate=False,
-    index=None,
-    save=False,
-    folder=None,
-    show=False,
+    animate=False,  # True to see frame by frame states of grid while running simulation
+    index=None,  # index for each frame of animation (visualize fn runs in a loop, loop variable is passed as index)
+    save=False,  # True to save frames (requires parameters index, folder)
+    folder=None,  # folder path to save frames
+    show=False,  # default False to allow animate to be true
     style=None,
     real_field_mode=False,
     real_component="Ex",
 ):
-    """
-    mode: 'energy' | 'real' | 'abs'
-    """
     """visualize a projection of the grid and the optical energy inside the grid
 
     Args:
@@ -91,7 +71,7 @@ def visualize(
         plt.style.use(style)
     if norm not in ("linear", "lin", "log"):
         raise ValueError("Color map normalization should be 'linear' or 'log'.")
-
+    # imports (placed here to circumvent circular imports)
     from .sources import PointSource, LineSource, PlaneSource, ComplexPlaneWave
     from .boundaries import (
         _PeriodicBoundaryX, _PeriodicBoundaryY, _PeriodicBoundaryZ,
@@ -150,52 +130,36 @@ def visualize(
     if has_det:
         plt.plot([], lw=3, color=detcolor, label="Detectors")
 
-    # Grid energy
     grid_energy = bd.sum(grid.E**2 + grid.H**2, -1)
     if x is not None:
         assert grid.Ny > 1 and grid.Nz > 1
-        xlabel, ylabel = "y", "z"
+        xlabel, ylabel = "y (um)", "z (um)"
         Nx, Ny = grid.Ny, grid.Nz
         pbx, pby = _PeriodicBoundaryY, _PeriodicBoundaryZ
         bbx, bby = _BlochBoundaryY, _BlochBoundaryZ
         pmlxl, pmlxh, pmlyl, pmlyh = _PMLYlow, _PMLYhigh, _PMLZlow, _PMLZhigh
-        grid_energy = grid_energy[x, :, :]
+        grid_energy = bd.real(grid.E[x, :, :, 0])
+        print("Visualizing YZ plane at x =", x)
     elif y is not None:
         assert grid.Nx > 1 and grid.Nz > 1
-        xlabel, ylabel = "z", "x"
+        xlabel, ylabel = "z (um)", "x (um)"
         Nx, Ny = grid.Nz, grid.Nx
         pbx, pby = _PeriodicBoundaryZ, _PeriodicBoundaryX
         bbx, bby = _BlochBoundaryZ, _BlochBoundaryX
         pmlxl, pmlxh, pmlyl, pmlyh = _PMLZlow, _PMLZhigh, _PMLXlow, _PMLXhigh
-        grid_energy = grid_energy[:, y, :].T
+        grid_energy = bd.real(grid.E[:, y, :, 0]).T  # Ex 分量
+        print("Visualizing XZ plane at y =", y)
     elif z is not None:
         assert grid.Nx > 1 and grid.Ny > 1
-        xlabel, ylabel = "x", "y"
+        xlabel, ylabel = "x (um)", "y (um)"
         Nx, Ny = grid.Nx, grid.Ny
         pbx, pby = _PeriodicBoundaryX, _PeriodicBoundaryY
         bbx, bby = _BlochBoundaryX, _BlochBoundaryY
         pmlxl, pmlxh, pmlyl, pmlyh = _PMLXlow, _PMLXhigh, _PMLYlow, _PMLYhigh
-        grid_energy = grid_energy[:, :, z]
+        grid_energy = bd.real(grid.E[:, :, z, 0])
+        print("Visualizing XY plane at z =", z)
     else:
         raise ValueError("Visualization only works for 2D grids")
-
-    if real_field_mode:
-        comp_idx = {"Ex": 0, "Ey": 1, "Ez": 2}[real_component]
-        if x is not None:
-            data = bd.numpy(grid.E[x, :, :, comp_idx].real)
-        elif y is not None:
-            data = bd.numpy(grid.E[:, y, :, comp_idx].real).T
-        elif z is not None:
-            data = bd.numpy(grid.E[:, :, z, comp_idx].real)
-        grid_energy = data
-    else:
-        grid_energy = bd.sum(grid.E**2 + grid.H**2, -1)
-        if x is not None:
-            grid_energy = grid_energy[x, :, :]
-        elif y is not None:
-            grid_energy = grid_energy[:, y, :].T
-        elif z is not None:
-            grid_energy = grid_energy[:, :, z]
 
     for source in grid.sources:
         if isinstance(source, (LineSource, ComplexPlaneWave)):
@@ -208,8 +172,6 @@ def visualize(
             elif z is not None:
                 _x = [source.x[0], source.x[-1]]
                 _y = [source.y[0], source.y[-1]]
-            _x = idx_to_um(_x, grid.grid_spacing)
-            _y = idx_to_um(_y, grid.grid_spacing)
             plt.plot(_y, _x, lw=3, color=srccolor)
         elif isinstance(source, PointSource):
             if x is not None:
@@ -221,8 +183,6 @@ def visualize(
             elif z is not None:
                 _x = source.x
                 _y = source.y
-            _x = idx_to_um(_x, grid.grid_spacing)
-            _y = idx_to_um(_y, grid.grid_spacing)
             plt.plot(_y - 0.5, _x - 0.5, lw=3, marker="o", color=srccolor)
             grid_energy[_x, _y] = 0  # do not visualize energy at location of source
         elif isinstance(source, PlaneSource):
@@ -280,8 +240,6 @@ def visualize(
         elif z is not None:
             _x = [detector.x[0], detector.x[-1]]
             _y = [detector.y[0], detector.y[-1]]
-        _x = idx_to_um(_x, grid.grid_spacing)
-        _y = idx_to_um(_y, grid.grid_spacing)
 
         if detector.__class__.__name__ == "BlockDetector":
             # BlockDetector
@@ -297,51 +255,41 @@ def visualize(
 
     # Boundaries
     for boundary in grid.boundaries:
-
-        # periodic boundary
+        # Periodic boundaries
         if isinstance(boundary, pbx):
             _x = [-0.5, -0.5, float("nan"), Nx - 0.5, Nx - 0.5]
             _y = [-0.5, Ny - 0.5, float("nan"), -0.5, Ny - 0.5]
-            _x = idx_to_um(_x, grid.grid_spacing)
-            _y = idx_to_um(_y, grid.grid_spacing)
-            plt.plot(_y, _x, color=pbcolor, linewidth=5)
+            plt.plot(_y, _x, color=pbcolor, linewidth=3)
         elif isinstance(boundary, pby):
             _x = [-0.5, Nx - 0.5, float("nan"), -0.5, Nx - 0.5]
             _y = [-0.5, -0.5, float("nan"), Ny - 0.5, Ny - 0.5]
-            _x = idx_to_um(_x, grid.grid_spacing)
-            _y = idx_to_um(_y, grid.grid_spacing)
-            plt.plot(_y, _x, color=pbcolor, linewidth=5)
+            plt.plot(_y, _x, color=pbcolor, linewidth=3)
 
-        # bloch boundary
+        # Bloch boundaries        
         if isinstance(boundary, bbx):
             _x = [-0.5, -0.5, float("nan"), Nx - 0.5, Nx - 0.5]
             _y = [-0.5, Ny - 0.5, float("nan"), -0.5, Ny - 0.5]
-            _x = idx_to_um(_x, grid.grid_spacing)
-            _y = idx_to_um(_y, grid.grid_spacing)
             plt.plot(_y, _x, color=bbcolor, linewidth=5)
         elif isinstance(boundary, bby):
             _x = [-0.5, Nx - 0.5, float("nan"), -0.5, Nx - 0.5]
             _y = [-0.5, -0.5, float("nan"), Ny - 0.5, Ny - 0.5]
-            _x = idx_to_um(_x, grid.grid_spacing)
-            _y = idx_to_um(_y, grid.grid_spacing)
             plt.plot(_y, _x, color=bbcolor, linewidth=5)
-        
-        # pml boundar
+
         elif isinstance(boundary, pmlyl):
-                patch = ptc.Rectangle(
-                xy = (idx_to_um(-0.5, grid.grid_spacing), idx_to_um(-0.5, grid.grid_spacing)),
-                width = idx_to_um(boundary.thickness, grid.grid_spacing),
-                height = idx_to_um(Nx, grid.grid_spacing),
+            patch = ptc.Rectangle(
+                xy=(-0.5, -0.5),
+                width=boundary.thickness,
+                height=Nx,
                 linewidth=0,
                 edgecolor="none",
                 facecolor=pmlcolor,
             )
-                plt.gca().add_patch(patch)
+            plt.gca().add_patch(patch)
         elif isinstance(boundary, pmlxl):
             patch = ptc.Rectangle(
-                xy = (idx_to_um(-0.5, grid.grid_spacing), idx_to_um(-0.5, grid.grid_spacing)),
-                width = idx_to_um(Ny, grid.grid_spacing),
-                height = idx_to_um(boundary.thickness, grid.grid_spacing),
+                xy=(-0.5, -0.5),
+                width=Ny,
+                height=boundary.thickness,
                 linewidth=0,
                 edgecolor="none",
                 facecolor=pmlcolor,
@@ -349,9 +297,9 @@ def visualize(
             plt.gca().add_patch(patch)
         elif isinstance(boundary, pmlyh):
             patch = ptc.Rectangle(
-                xy = (idx_to_um(Ny - 0.5 - boundary.thickness, grid.grid_spacing), idx_to_um(-0.5, grid.grid_spacing)),
-                width = idx_to_um(boundary.thickness, grid.grid_spacing),
-                height = idx_to_um(Nx, grid.grid_spacing),
+                xy=(Ny - 0.5 - boundary.thickness, -0.5),
+                width=boundary.thickness,
+                height=Nx,
                 linewidth=0,
                 edgecolor="none",
                 facecolor=pmlcolor,
@@ -359,10 +307,9 @@ def visualize(
             plt.gca().add_patch(patch)
         elif isinstance(boundary, pmlxh):
             patch = ptc.Rectangle(
-                xy = (idx_to_um(-0.5, grid.grid_spacing), idx_to_um(Nx - boundary.thickness - 0.5, grid.grid_spacing)),
-                # xy=(-0.5, Nx - boundary.thickness - 0.5),
-                width = idx_to_um(Ny, grid.grid_spacing),
-                height = idx_to_um(boundary.thickness, grid.grid_spacing),
+                xy=(-0.5, Nx - boundary.thickness - 0.5),
+                width=Ny,
+                height=boundary.thickness,
                 linewidth=0,
                 edgecolor="none",
                 facecolor=pmlcolor,
@@ -379,11 +326,9 @@ def visualize(
         elif z is not None:
             _x = (obj.x.start, obj.x.stop)
             _y = (obj.y.start, obj.y.stop)
-        _x = idx_to_um(_x, grid.grid_spacing)
-        _y = idx_to_um(_y, grid.grid_spacing)
-        # 為每個 object 分別畫 patch，並用 name 當 label
+
         patch = ptc.Rectangle(
-            xy=(min(_y), min(_x)),
+            xy=(min(_y) - 0.5, min(_x) - 0.5),
             width=max(_y) - min(_y),
             height=max(_x) - min(_x),
             linewidth=0,
@@ -397,25 +342,22 @@ def visualize(
     cmap_norm = None
     if norm == "log":
         cmap_norm = LogNorm(vmin=1e-4, vmax=grid_energy.max() + 1e-4)
-
-    if x is not None:
-        plane = "yz"
-    elif y is not None:
-        plane = "xz"
-    elif z is not None:
-        plane = "xy"    
-    extent = get_extent(grid, plane)
-
     amp = bd.max(abs(grid_energy))
     plt.imshow(
-        bd.numpy(grid_energy), 
-        cmap=cmap, 
-        vmin = -amp,
-        vmax = amp,
-        interpolation="sinc", 
-        extent=extent,
-        origin="lower",
-        norm=cmap_norm)
+        # abs(bd.numpy(grid_energy)), cmap=cmap, interpolation="sinc", norm=cmap_norm
+        bd.numpy(grid_energy), cmap=cmap, vmin=-1, vmax=1, interpolation="sinc", origin="lower", norm=cmap_norm
+    )
+
+    # 設定物理座標的刻度
+    x_physical = [i * grid.grid_spacing * 1e6 for i in range(0, Ny, max(1, Ny//10))]
+    y_physical = [i * grid.grid_spacing * 1e6 for i in range(0, Nx, max(1, Nx//10))]
+
+    # 設定刻度位置和標籤
+    x_ticks = list(range(0, Ny, max(1, Ny//10)))
+    y_ticks = list(range(0, Nx, max(1, Nx//10)))
+
+    # plt.xticks(x_ticks, [f"{x:.1f}" for x in x_physical])
+    # plt.yticks(y_ticks, [f"{y:.1f}" for y in y_physical])
 
     # finalize the plot
     plt.ylabel(xlabel)
@@ -484,7 +426,7 @@ def dB_map_2D(
     a = 10 * log10([[y / minVal for y in x] for x in a])
 
     plt.title("dB map of Electrical waves in detector region")
-    plt.imshow(a, cmap="jet", interpolation=interpolation)
+    plt.imshow(a, cmap="inferno", interpolation=interpolation)
     cbar = plt.colorbar()
     cbar.ax.set_ylabel("dB scale", rotation=270)
 
@@ -526,44 +468,48 @@ def plot_detection(detector_dict=None, specific_plot=None, show=True, style=None
             plt.figure(0, figsize=(15, 15))
         elif detector[-2] == "H":
             plt.figure(1, figsize=(15, 15))
-        # for dimension in range(len(detector_dict[detector][0][0])):
-        #     if specific_plot is not None:
-        #         if ["x", "y", "z"].index(specific_plot[1]) != dimension:
-        #             continue
-        #     # if specific_plot, subplot on 1x1, else subplot on 2x2
-        #     plt.subplot(
-        #         2 - int(specific_plot is not None),
-        #         2 - int(specific_plot is not None),
-        #         dimension + 1 if specific_plot is None else 1,
-        #     )
-        #     hilbertPlot = abs(
-        #         hilbert([x[0][dimension] for x in detector_dict[detector]])
-        #     )
-        #     plt.plot(hilbertPlot, label=detector)
-        #     plt.title(detector[-2] + "(" + ["x", "y", "z"][dimension] + ")")
-        #     if detector[-2] not in maxArray:
-        #         maxArray[detector[-2]] = {}
-        #     if str(dimension) not in maxArray[detector[-2]]:
-        #         maxArray[detector[-2]][str(dimension)] = []
-        #     maxArray[detector[-2]][str(dimension)].append(
-        #         [detector, where(hilbertPlot == max(hilbertPlot))[0][0]]
-        #     )
-
-    # Combine E and H components into a single 2x3 matrix plot
-    plt.figure(figsize=(15, 10))
-    for i in range(2):
         for dimension in range(len(detector_dict[detector][0][0])):
-            plt.subplot(2, 3, i * 3 + dimension + 1)
+            if specific_plot is not None:
+                if ["x", "y", "z"].index(specific_plot[1]) != dimension:
+                    continue
+            # if specific_plot, subplot on 1x1, else subplot on 2x2
+            plt.subplot(
+                2 - int(specific_plot is not None),
+                2 - int(specific_plot is not None),
+                dimension + 1 if specific_plot is None else 1,
+            )
             hilbertPlot = abs(
                 hilbert([x[0][dimension] for x in detector_dict[detector]])
             )
-            plt.plot(hilbertPlot, label=f"{['E', 'H'][i]}{['x', 'y', 'z'][dimension]}")
-            plt.title(f"{['E', 'H'][i]}({['x', 'y', 'z'][dimension]})")
+            plt.plot(hilbertPlot, label=detector)
+            plt.title(detector[-2] + "(" + ["x", "y", "z"][dimension] + ")")
+            if detector[-2] not in maxArray:
+                maxArray[detector[-2]] = {}
+            if str(dimension) not in maxArray[detector[-2]]:
+                maxArray[detector[-2]][str(dimension)] = []
+            maxArray[detector[-2]][str(dimension)].append(
+                [detector, where(hilbertPlot == max(hilbertPlot))[0][0]]
+            )
+
+    # Loop same as above, only to add axes labels
+    for i in range(2):
+        if specific_plot is not None:
+            if ["E", "H"][i] != specific_plot[0]:
+                continue
+        plt.figure(i)
+        for dimension in range(len(detector_dict[detector][0][0])):
+            if specific_plot is not None:
+                if ["x", "y", "z"].index(specific_plot[1]) != dimension:
+                    continue
+            plt.subplot(
+                2 - int(specific_plot is not None),
+                2 - int(specific_plot is not None),
+                dimension + 1 if specific_plot is None else 1,
+            )
             plt.xlabel("Time steps")
             plt.ylabel("Magnitude")
-    plt.suptitle("Intensity profile")
+        plt.suptitle("Intensity profile")
     plt.legend()
-    plt.tight_layout()
     plt.show()
 
     for item in maxArray:
