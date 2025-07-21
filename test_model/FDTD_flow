@@ -1,59 +1,49 @@
 flowchart TD
-%% 使用者輸入
 A[使用者輸入] –> A1[波長 wavelength]
 A –> A2[網格尺寸 grid_spacing]
 A –> A3[穩定性因子 0.99]
 
 ```
-%% 初始階段計算
-A1 --> B1[物理頻率<br/>f = c/λ]
-B1 --> B2[物理週期<br/>T = 1/f]
+A1 --> B1["物理頻率<br/>f = c/λ"]
+B1 --> B2["物理週期<br/>T = 1/f"]
 
 A2 --> C1[計算維度數 D]
-C1 --> C2[最大Courant數<br/>Cmax = 1/√D]
+C1 --> C2["最大Courant數<br/>Cmax = 1/√D"]
 A3 --> C2
-C2 --> C3[實際Courant數<br/>C = 0.99 × Cmax]
+C2 --> C3["實際Courant數<br/>C = 0.99 × Cmax"]
 
-%% 關鍵時間步長計算
-A2 --> D1[時間步長計算<br/>Δt = C × Δx / c]
+A2 --> D1["時間步長計算<br/>Δt = C × Δx / c"]
 C3 --> D1
-D1 --> D2{時間步長 Δt}
+D1 --> D2["時間步長 Δt"]
 
-%% 數值頻率轉換
-B2 --> E1[模擬週期<br/>Tsim = T/Δt]
+B2 --> E1["模擬週期<br/>Tsim = T/Δt"]
 D2 --> E1
-E1 --> E2[模擬頻率<br/>fsim = 1/Tsim]
-E2 --> E3[模擬角頻率<br/>ωsim = 2π/Tsim]
+E1 --> E2["模擬頻率<br/>fsim = 1/Tsim"]
+E2 --> E3["模擬角頻率<br/>ωsim = 2π/Tsim"]
 
-%% 網格註冊階段
 E3 --> F1[Register Grid 階段]
-F1 --> F2[計算空間相位 k·r]
+F1 --> F2["計算空間相位 k·r"]
 
-%% 時間迭代開始
 F2 --> G1[時間迭代開始]
 G1 --> G2[當前時間步 q]
-G2 --> G3[時間相位<br/>φt = ωsim × q + φ0]
+G2 --> G3["時間相位<br/>φt = ωsim × q + φ0"]
 
-%% 包絡函數選擇
 G3 --> H1{源類型?}
-H1 -->|Pulse| H2[物理時間<br/>t = q × Δt]
-H2 --> H3[Hanning包絡<br/>env = hanning(t,f)]
-H1 -->|CW| H4[連續波<br/>env = 1.0]
+H1 -->|Pulse| H2["物理時間<br/>t = q × Δt"]
+H2 --> H3["Hanning包絡<br/>env = hanning(t,f)"]
+H1 -->|CW| H4["連續波<br/>env = 1.0"]
 
-%% 場更新
-H3 --> I1[場計算<br/>field = A × env × e^j(k·r + φt)]
+H3 --> I1["場計算<br/>field = A × env × exp(j(k·r + φt))"]
 H4 --> I1
-I1 --> I2[場疊加<br/>E = E + field]
+I1 --> I2["場疊加<br/>E = E + field"]
 
-%% Maxwell方程求解
 I2 --> J1[Maxwell方程時間步進]
 J1 --> J2[更新磁場 H]
 J2 --> J3[更新電場 E]
-J3 --> J4{q < 總步數?}
+J3 --> J4{"q < 總步數?"}
 J4 -->|是| G2
 J4 -->|否| K1[模擬結束]
 
-%% 樣式設定
 classDef input fill:#e1f5fe,stroke:#01579b,stroke-width:2px
 classDef calc fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
 classDef key fill:#ffecb3,stroke:#e65100,stroke-width:3px
