@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>標準Python Hanning函數對比</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .chart-container {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .code-box {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+        }
+        .comparison-box {
+            background: #fff3cd;
+            padding: 15px;
+            margin: 15px 0;
+            border-left: 4px solid #ffc107;
+            border-radius: 5px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .full-width {
+            grid-column: 1 / -1;
+        }
+        h2 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .highlight {
+            background: #ffeb3b;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        .error {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+        }
+        .correct {
+            background: #e8f5e8;
+            border-left: 4px solid #4caf50;
+        }
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>標準Python Hanning函數對比</h1>
+        
+        <h2>1. 標準Python庫中的Hanning窗</h2>
+        
+        <div class="grid">
+            <div>
+                <h3>NumPy / SciPy實現</h3>
+                <div class="code-box">
+<span style="color: #68d391"># NumPy</span>
+import numpy as np
+
+<span style="color: #fbb6ce"># 方法1：直接生成窗</span>
+window = np.hanning(N)  <span style="color: #a0aec0"># N個點的窗</span>
+
+<span style="color: #fbb6ce"># 方法2：手動計算</span>
+n = np.arange(N)
+window = 0.5 * (1 - np.cos(2*np.pi*n/(N-1)))
+
+<span style="color: #fbb6ce"># 應用到信號</span>
+signal_windowed = signal * window
+                </div>
+            </div>
+            
+            <div>
+                <h3>標準Hanning窗特性</h3>
+                <div class="comparison-box correct">
+                    <strong>✅ 正確特性：</strong><br>
+                    • <strong>純包絡</strong>：只是窗函數，不包含載波<br>
+                    • <strong>範圍</strong>：值在[0, 1]之間<br>
+                    • <strong>對稱</strong>：關於中心點對稱<br>
+                    • <strong>邊界</strong>：兩端為0，中心為1<br>
+                    • <strong>平滑</strong>：連續且可微
+                </div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <h3>標準Hanning窗可視化</h3>
+            <canvas id="standardHanning" width="800" height="400"></canvas>
+        </div>
+
+        <h2>2. Flaport的Hanning函數</h2>
+        
+        <div class="code-box">
+<span style="color: #68d391"># Flaport的實現</span>
+def hanning(f, t, n):
+    return (1 / 2) * (1 - cos(f * t / n)) * (sin(f * t))
+    <span style="color: #f56565">       ^^^包絡部分^^^       ^^^載波部分^^^</span>
+        </div>
+        
+        <div class="comparison-box error">
+            <strong>❌ 問題：</strong><br>
+            這<strong>不是</strong>標準的Hanning窗！這是一個<strong>調制信號</strong>，同時包含了包絡和載波。
+        </div>
+
+        <h2>3. 兩者對比</h2>
+        
+        <div class="chart-container full-width">
+            <h3>標準Hanning vs Flaport Hanning</h3>
+            <canvas id="hanningComparison" width="1000" height="500"></canvas>
+        </div>
+
+        <h2>4. 正確的FDTD脈衝實現</h2>
+        
+        <div class="grid">
+            <div>
+                <h3>方法1：標準窗函數 + 載波</h3>
+                <div class="code-box">
+<span style="color: #68d391"># 正確的分離式設計</span>
+def create_pulse(timesteps, pulse_length, frequency):
+    <span style="color: #fbb6ce"># 1. 創建窗函數</span>
+    window = np.hanning(pulse_length)
+    
+    <span style="color: #fbb6ce"># 2. 創建載波</span>
+    t = np.arange(timesteps)
+    carrier = np.sin(2 * np.pi * frequency * t)
+    
+    <span style="color: #fbb6ce"># 3. 應用窗到指定區間</span>
+    pulse = carrier.copy()
+    start_idx = (timesteps - pulse_length) // 2
+    end_idx = start_idx + pulse_length
+    pulse[start_idx:end_idx] *= window
+    pulse[:start_idx] = 0
+    pulse[end_idx:] = 0
+    
+    return pulse
+                </div>
+            </div>
+            
+            <div>
+                <h3>方法2：即時計算（推薦）</h3>
+                <div class="code-box">
+<span style="color: #68d391"># 適合FDTD的即時計算</span>
+def get_pulse_amplitude(q, pulse_start, pulse_length):
+    if pulse_start <= q < pulse_start + pulse_length:
+        <span style="color: #fbb6ce"># 在脈衝內，計算窗函數值</span>
+        relative_pos = (q - pulse_start) / pulse_length
+        window_value = 0.5 * (1 - np.cos(2*np.pi*relative_pos))
+        return window_value
+    else:
+        return 0.0
+
+<span style="color: #fbb6ce"># 在FDTD循環中使用</span>
+for q in range(total_timesteps):
+    envelope = get_pulse_amplitude(q, start, length)
+    carrier_phase = omega * q
+    field = amplitude * envelope * np.exp(1j * carrier_phase)
+                </div>
+            </div>
+        </div>
+
+        <div class="chart-container full-width">
+            <h3>正確的脈衝實現對比</h3>
+            <canvas id="correctImplementation" width="1000" height="400"></canvas>
+        </div>
+
+        <h2>5. 您的修正建議</h2>
+        
+        <div class="comparison-box correct">
+            <h3>🎯 推薦解決方案</h3>
+            <p><strong>替換Flaport的hanning函數：</strong></p>
+        </div>
+        
+        <div class="code-box">
+<span style="color: #68d391"># 修正後的包絡函數</span>
+def hanning_envelope(pulse_progress, total_length):
+    """
+    pulse_progress: 當前在脈衝中的位置 (0到total_length)
+    total_length: 脈衝總長度
+    """
+    if 0 <= pulse_progress <= total_length:
+        relative_pos = pulse_progress / total_length
+        return 0.5 * (1 - np.cos(2 * np.pi * relative_pos))
+    else:
+        return 0.0
+
+<span style="color: #68d391"># 在ComplexPlaneWave中使用</span>
+def update_E(self):
+    q = self.grid.time_steps_passed
+    
+    if self.pulse:
+        pulse_duration = self.cycle * self.period_sim
+        if q < pulse_duration:
+            envelope = hanning_envelope(q, pulse_duration)
+        else:
+            envelope = 0
+    else:
+        envelope = 1
+    
+    <span style="color: #fbb6ce"># 載波由主相位控制</span>
+    time_phase = self.omega_sim * q + self.phase_shift
+    
+    for xi, zi in zip(self.x, self.z):
+        spatial_phase = self.spatial_phase[(xi, zi)]
+        total_phase = time_phase + spatial_phase
+        field_value = self.amplitude * envelope * bd.exp(1j * total_phase)
+        self.grid.E[xi, 0, zi, self.pol_index] += field_value
+        </div>
+
+        <div class="comparison-box">
+            <strong>關鍵改進：</strong><br>
+            ✅ 包絡和載波完全分離<br>
+            ✅ 載波頻率由omega_sim統一控制<br>
+            ✅ 窗函數只負責調制振幅<br>
+            ✅ 避免頻率衝突問題
+        </div>
+    </div>
+
+    <script>
+        // 生成標準Hanning窗
+        const N = 100;
+        const indices = Array.from({length: N}, (_, i) => i);
+        const standardHanning = indices.map(i => 0.5 * (1 - Math.cos(2 * Math.PI * i / (N - 1))));
+        
+        // 模擬Flaport參數
+        const f = 0.1;
+        const n = 5;
+        const t_values = Array.from({length: 200}, (_, i) => i);
+        
+        // Flaport hanning函數
+        const flopartHanning = t_values.map(t => {
+            const envelope = 0.5 * (1 - Math.cos(f * t / n));
+            const carrier = Math.sin(f * t);
+            return envelope * carrier;
+        });
+        
+        // Flaport的包絡部分
+        const flopartEnvelope = t_values.map(t => 0.5 * (1 - Math.cos(f * t / n)));
+        
+        // Flaport的載波部分
+        const flopartCarrier = t_values.map(t => Math.sin(f * t));
+
+        // 圖表配置
+        const chartConfig = {
+            type: 'line',
+            options: {
+                responsive: true,
+                elements: { point: { radius: 0 } },
+                plugins: { legend: { display: true } },
+                scales: {
+                    x: { title: { display: true } },
+                    y: { title: { display: true } }
+                }
+            }
+        };
+        
+        // 1. 標準Hanning窗
+        new Chart(document.getElementById('standardHanning'), {
+            ...chartConfig,
+            data: {
+                labels: indices,
+                datasets: [{
+                    label: '標準Hanning窗：0.5 × (1 - cos(2πn/(N-1)))',
+                    data: standardHanning,
+                    borderColor: '#2196F3',
+                    borderWidth: 3,
+                    backgroundColor: 'rgba(33, 150, 243, 0.1)',
+                    fill: true
+                }]
+            },
+            options: {
+                ...chartConfig.options,
+                scales: {
+                    x: { title: { display: true, text: '樣本索引' } },
+                    y: { title: { display: true, text: '窗值 [0, 1]' } }
+                }
+            }
+        });
+        
+        // 2. Hanning對比
+        new Chart(document.getElementById('hanningComparison'), {
+            ...chartConfig,
+            data: {
+                labels: t_values,
+                datasets: [
+                    {
+                        label: 'Flaport包絡：(1 - cos(f×t/n))',
+                        data: flopartEnvelope,
+                        borderColor: '#FF9800',
+                        borderWidth: 3,
+                        fill: false
+                    },
+                    {
+                        label: 'Flaport載波：sin(f×t)',
+                        data: flopartCarrier.map(x => x * 0.5), // 縮放便於觀看
+                        borderColor: '#F44336',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        fill: false
+                    },
+                    {
+                        label: 'Flaport完整：包絡 × 載波',
+                        data: flopartHanning,
+                        borderColor: '#9C27B0',
+                        borderWidth: 2,
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                ...chartConfig.options,
+                scales: {
+                    x: { title: { display: true, text: '時間參數 t' } },
+                    y: { title: { display: true, text: '振幅' } }
+                }
+            }
+        });
+        
+        // 3. 正確實現對比
+        const totalTime = 200;
+        const pulseStart = 50;
+        const pulseLength = 50;
+        const carrierFreq = 0.2;
+        
+        const timeAxis = Array.from({length: totalTime}, (_, i) => i);
+        
+        // 錯誤的方法（Flaport style）
+        const wrongPulse = timeAxis.map(t => {
+            if (t >= pulseStart && t < pulseStart + pulseLength) {
+                const relT = t - pulseStart;
+                const envelope = 0.5 * (1 - Math.cos(f * relT / n));
+                const wrongCarrier = Math.sin(f * relT);
+                const mainCarrier = Math.sin(carrierFreq * t);
+                return envelope * wrongCarrier * mainCarrier; // 頻率衝突！
+            }
+            return 0;
+        });
+        
+        // 正確的方法
+        const correctPulse = timeAxis.map(t => {
+            let envelope = 0;
+            if (t >= pulseStart && t < pulseStart + pulseLength) {
+                const progress = (t - pulseStart) / pulseLength;
+                envelope = 0.5 * (1 - Math.cos(2 * Math.PI * progress));
+            }
+            const carrier = Math.sin(carrierFreq * t);
+            return envelope * carrier;
+        });
+        
+        // 只有包絡
+        const envelopeOnly = timeAxis.map(t => {
+            if (t >= pulseStart && t < pulseStart + pulseLength) {
+                const progress = (t - pulseStart) / pulseLength;
+                return 0.5 * (1 - Math.cos(2 * Math.PI * progress));
+            }
+            return 0;
+        });
+        
+        new Chart(document.getElementById('correctImplementation'), {
+            ...chartConfig,
+            data: {
+                labels: timeAxis,
+                datasets: [
+                    {
+                        label: '純包絡（標準Hanning）',
+                        data: envelopeOnly,
+                        borderColor: '#4CAF50',
+                        borderWidth: 3,
+                        backgroundColor: 'rgba(76, 175, 80, 0.2)',
+                        fill: true
+                    },
+                    {
+                        label: '正確的脈衝：包絡 × 統一載波',
+                        data: correctPulse,
+                        borderColor: '#2196F3',
+                        borderWidth: 2,
+                        fill: false
+                    },
+                    {
+                        label: '錯誤的脈衝：頻率衝突',
+                        data: wrongPulse,
+                        borderColor: '#F44336',
+                        borderWidth: 2,
+                        borderDash: [3, 3],
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                ...chartConfig.options,
+                scales: {
+                    x: { title: { display: true, text: '時間 (timesteps)' } },
+                    y: { title: { display: true, text: '場振幅' } }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
