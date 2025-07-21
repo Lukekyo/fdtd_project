@@ -159,9 +159,9 @@ def quick_field_visualization(grid):
     plt.sca(axes[1, 0])
     z_profile = Ex_real[Nx//2, :]  # 中間 X 位置
     z_indices = np.arange(len(z_profile))
-    plt.plot(z_indices, z_profile)
-    plt.xlabel("Z (grid)")
-    plt.ylabel("Ex real port")
+    plt.plot(z_indices*grid_spacing, z_profile)
+    plt.xlabel("Z (um)")
+    plt.ylabel("Ex real part")
     plt.title("Z cross section of Ex real part")
     plt.grid(True)
     
@@ -196,7 +196,7 @@ if __name__ == "__main__":
             # 帶動畫的完整模擬
             results, grid = run_simulation(
                 with_structure=False, 
-                total_steps=300,  # 減少步數以便觀察
+                total_steps=1000,  # 減少步數以便觀察
                 animation_interval=10  # 每5步顯示一次
             )
         else:

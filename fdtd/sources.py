@@ -511,7 +511,7 @@ class ComplexPlaneWave:
         polarization_axis: str = "x",
         name: str = None,
         pulse: bool = False,
-        cycle: int = 5,
+        cycle: int = 3,
         hanning_dt: float = None,
         medium_n: float = None
     ):
@@ -545,8 +545,6 @@ class ComplexPlaneWave:
         self.period = 1.0 / self.frequency  # 秒
         self.omega = 2 * bd.pi * self.frequency  # rad/s
         self.k = 2 * np.pi / wavelength  # 1/m
-        # 計算Hanning窗脈衝的時間步長
-        self.hanning_dt = hanning_dt if hanning_dt is not None else 0.5 / self.frequency
         # 初始化其他屬性
         self.grid = None
         self.period_sim = None      # 將在_register_grid中計算
@@ -568,9 +566,9 @@ class ComplexPlaneWave:
         # period, frequency and omega in simulation time steps
         self.period_sim = self.period / grid.time_step  # timesteps
         self.frequency_sim = 1.0 / self.period_sim         # 1/timestep  
-        self.omega_sim = 2 * np.pi / self.period_sim       # rad/timestep
+        self.omega_sim = 2 * bd.pi / self.period_sim       # rad/timestep
         # 將 hanning_dt 轉成模擬步數
-        self.hanning_dt_sim = self.hanning_dt / grid.time_step
+        self.hanning_dt_sim = 0.5 / self.frequency_sim
         # === 空間相位設定 計算 kx, kz ===
         kx = self.k * bd.sin(self.theta)
         kz = self.k * bd.cos(self.theta)
@@ -654,32 +652,22 @@ class ComplexPlaneWave:
     def update_E(self):
 
         q = self.grid.time_steps_passed
-        
-        # 時間相位計算（兩種方法等價，選一種）
-        # 方法1：使用模擬頻率
+                
+        # 載波相位
         time_phase = self.omega_sim * q + self.phase_shift
         
-        # 方法2：使用物理時間（驗證一致性）
-        # t = q * self.grid.time_step
-        # time_phase_check = self.omega * t + self.phase_shift
-        # assert abs(time_phase - time_phase_check) < 1e-10
-        
-        # 脈衝包絡計算（統一使用物理時間）
         if self.pulse:
-            t1 = int(2 * bd.pi / (self.frequency_sim * self.hanning_dt_sim / self.cycle))
-            if q < t1:
-                envelope = hanning(self.frequency_sim, q * self.hanning_dt_sim, self.cycle)
+            pulse_duration = int(self.cycle * self.period_sim)
+            
+            if q < pulse_duration:
+                # 即時計算hanning窗值
+                progress = q / pulse_duration  # 0到1
+                envelope = 0.5 * (1 - bd.cos(2 * bd.pi * progress))
             else:
                 envelope = 0
-            # t = q * self.grid.time_step  # 當前物理時間
-            # t_pulse_duration = 2 * bd.pi * self.cycle / self.omega  # 脈衝持續時間
-            # if t < t_pulse_duration:
-            #     envelope = hanning(self.frequency, t, self.cycle)
-            # else:
-            #     envelope = 0
         else:
             envelope = 1
-        
+
         # 更新每個格點的電場
         for xi, zi in zip(self.x, self.z):
             spatial_phase = self.spatial_phase[(xi, zi)]
@@ -687,7 +675,7 @@ class ComplexPlaneWave:
             
             field_value = self.amplitude * bd.exp(1j * total_phase) * envelope
             self.grid.E[xi, 0, zi, self.pol_index] += field_value
-        
+
     def update_H(self):
         pass
 
