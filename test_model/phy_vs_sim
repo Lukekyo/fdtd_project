@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FDTD參數關係圖像化說明</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .chart-container {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .parameter-box {
+            background: #e8f4f8;
+            padding: 15px;
+            margin: 15px 0;
+            border-left: 4px solid #2196F3;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .calculation-box {
+            background: #fff3cd;
+            padding: 15px;
+            margin: 15px 0;
+            border-left: 4px solid #ffc107;
+            border-radius: 5px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .full-width {
+            grid-column: 1 / -1;
+        }
+        h2 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .highlight {
+            background: #ffeb3b;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>FDTD參數關係圖像化說明</h1>
+        
+        <h2>1. 物理參數 → 模擬參數的轉換</h2>
+        
+        <div class="grid">
+            <div>
+                <div class="parameter-box">
+                    <strong>物理參數 (SI單位)</strong><br>
+                    wavelength = 1550e-9 m<br>
+                    frequency = 3e8 / 1550e-9 = 1.94e14 Hz<br>
+                    period = 1 / frequency = 5.16e-15 s<br>
+                    omega = 2π × frequency = 1.22e15 rad/s
+                </div>
+                
+                <div class="calculation-box">
+                    <strong>單位轉換關鍵</strong><br>
+                    grid.time_step ≈ 4.66e-17 s<br>
+                    這是連接物理與模擬的橋梁！
+                </div>
+            </div>
+            
+            <div>
+                <div class="parameter-box">
+                    <strong>模擬參數 (timestep單位)</strong><br>
+                    period_sim = period / time_step = 110.7 timesteps<br>
+                    frequency_sim = 1 / period_sim = 0.009 (1/timestep)<br>
+                    omega_sim = 2π / period_sim = 0.057 rad/timestep
+                </div>
+                
+                <div class="calculation-box">
+                    <strong>物理意義</strong><br>
+                    110.7 timesteps = 一個光學週期<br>
+                    每個timestep相位增加 0.057 rad
+                </div>
+            </div>
+        </div>
+
+        <h2>2. 載波振盪可視化</h2>
+        
+        <div class="chart-container">
+            <h3>物理時間 vs 模擬時間的載波</h3>
+            <canvas id="carrierComparison" width="800" height="400"></canvas>
+            <div class="calculation-box">
+                <strong>觀察重點</strong>：兩條曲線完全重合！這證明單位轉換正確。<br>
+                <span class="highlight">omega_sim × timestep = omega × time</span>
+            </div>
+        </div>
+
+        <h2>3. Hanning參數設計</h2>
+        
+        <div class="grid">
+            <div class="chart-container">
+                <h3>hanning_dt_sim的作用</h3>
+                <canvas id="hanningDt" width="400" height="300"></canvas>
+                <div class="parameter-box">
+                    hanning_dt_sim = 0.5 / frequency_sim<br>
+                    = 0.5 / 0.009 = 55.35
+                </div>
+            </div>
+            
+            <div class="chart-container">
+                <h3>脈衝持續時間計算</h3>
+                <canvas id="pulseDuration" width="400" height="300"></canvas>
+                <div class="parameter-box">
+                    t1 = 2π / (frequency_sim × hanning_dt_sim / cycle)<br>
+                    = 2π / (0.009 × 55.35 / 5) = 667 timesteps
+                </div>
+            </div>
+        </div>
+
+        <h2>4. Hanning函數完整分析</h2>
+        
+        <div class="chart-container full-width">
+            <h3>hanning(f, t, n) 的三個組成部分</h3>
+            <canvas id="hanningComponents" width="1000" height="500"></canvas>
+            <div class="parameter-box">
+                def hanning(f, t, n):<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;envelope = (1/2) × (1 - cos(f × t / n))  # 包絡部分<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;carrier = sin(f × t)  # 載波部分<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;return envelope × carrier
+            </div>
+        </div>
+
+        <h2>5. 完整的脈衝生成過程</h2>
+        
+        <div class="chart-container full-width">
+            <h3>您的ComplexPlaneWave中的脈衝</h3>
+            <canvas id="complexPulse" width="1000" height="400"></canvas>
+            <div class="calculation-box">
+                <strong>注意</strong>：您的實現中，hanning函數提供的載波會與主載波<span class="highlight">相互干擾</span>！<br>
+                主載波：exp(j × omega_sim × q)<br>
+                Hanning載波：sin(frequency_sim × q × hanning_dt_sim)<br>
+                兩者頻率不同，會產生拍頻現象！
+            </div>
+        </div>
+
+        <h2>6. 問題診斷</h2>
+        
+        <div class="calculation-box">
+            <h3>🔍 為什麼您的脈衝看起來奇怪？</h3>
+            <p><strong>頻率衝突</strong>：</p>
+            <ul>
+                <li>主載波頻率：omega_sim = 0.057 rad/timestep</li>
+                <li>Hanning載波頻率：frequency_sim × hanning_dt_sim = 0.009 × 55.35 = 0.498 rad/timestep</li>
+                <li>比例：0.498 / 0.057 ≈ 8.7倍！</li>
+            </ul>
+            
+            <p><strong>解決方案</strong>：</p>
+            <ol>
+                <li><strong>只用包絡</strong>：修改hanning函數，只返回包絡部分</li>
+                <li><strong>統一載波</strong>：讓hanning的載波頻率等於omega_sim</li>
+                <li><strong>簡化設計</strong>：用簡單的窗函數代替hanning</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        // 設定實際的數值參數
+        const wavelength = 1550e-9;
+        const c = 3e8;
+        const frequency_phys = c / wavelength;  // 1.94e14 Hz
+        const period_phys = 1 / frequency_phys; // 5.16e-15 s
+        const omega_phys = 2 * Math.PI * frequency_phys; // 1.22e15 rad/s
+        
+        const time_step = 4.66e-17; // s
+        const period_sim = period_phys / time_step; // 110.7 timesteps
+        const frequency_sim = 1 / period_sim; // 0.009 1/timestep
+        const omega_sim = 2 * Math.PI / period_sim; // 0.057 rad/timestep
+        
+        const hanning_dt_sim = 0.5 / frequency_sim; // 55.35
+        const cycle = 5;
+        const t1 = 2 * Math.PI / (frequency_sim * hanning_dt_sim / cycle); // 667 timesteps
+        
+        // 生成時間軸
+        const timesteps = 200;
+        const q_array = Array.from({length: timesteps}, (_, i) => i);
+        const t_array = q_array.map(q => q * time_step);
+        
+        // 圖表配置
+        const chartConfig = {
+            type: 'line',
+            options: {
+                responsive: true,
+                elements: {
+                    point: { radius: 0 }
+                },
+                plugins: {
+                    legend: { display: true }
+                },
+                scales: {
+                    x: { title: { display: true } },
+                    y: { title: { display: true } }
+                }
+            }
+        };
+        
+        // 1. 載波比較
+        const carrier_phys = q_array.map(q => Math.sin(omega_phys * q * time_step));
+        const carrier_sim = q_array.map(q => Math.sin(omega_sim * q));
+        
+        new Chart(document.getElementById('carrierComparison'), {
+            ...chartConfig,
+            data: {
+                labels: q_array,
+                datasets: [
+                    {
+                        label: '物理載波：sin(omega × t)',
+                        data: carrier_phys,
+                        borderColor: '#e74c3c',
+                        borderWidth: 2,
+                        fill: false
+                    },
+                    {
+                        label: '模擬載波：sin(omega_sim × q)',
+                        data: carrier_sim,
+                        borderColor: '#3498db',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                ...chartConfig.options,
+                scales: {
+                    x: { title: { display: true, text: 'Timesteps (q)' } },
+                    y: { title: { display: true, text: 'Amplitude' } }
+                }
+            }
+        });
+        
+        // 2. hanning_dt_sim效果
+        const hanning_arg = q_array.map(q => q * hanning_dt_sim);
+        const hanning_envelope = hanning_arg.map(arg => 0.5 * (1 - Math.cos(frequency_sim * arg / cycle)));
+        
+        new Chart(document.getElementById('hanningDt'), {
+            ...chartConfig,
+            data: {
+                labels: q_array,
+                datasets: [{
+                    label: 'q × hanning_dt_sim',
+                    data: hanning_arg,
+                    borderColor: '#9b59b6',
+                    borderWidth: 2,
+                    fill: false
+                }]
+            },
+            options: {
+                ...chartConfig.options,
+                scales: {
+                    x: { title: { display: true, text: 'Timesteps (q)' } },
+                    y: { title: { display: true, text: 'Value' } }
+                }
+            }
+        });
+        
+        // 3. 脈衝持續時間
+        const pulse_indicator = q_array.map(q => q < t1 ? 1 : 0);
+        
+        new Chart(document.getElementById('pulseDuration'), {
+            ...chartConfig,
+            data: {
+                labels: q_array,
+                datasets: [{
+                    label: `脈衝窗 (持續 ${Math.round(t1)} timesteps)`,
+                    data: pulse_indicator,
+                    borderColor: '#2ecc71',
+                    backgroundColor: 'rgba(46, 204, 113, 0.2)',
+                    borderWidth: 2,
+                    fill: true
+                }]
+            },
+            options: {
+                ...chartConfig.options,
+                scales: {
+                    x: { title: { display: true, text: 'Timesteps (q)' } },
+                    y: { title: { display: true, text: 'On/Off' } }
+                }
+            }
+        });
+        
+        // 4. Hanning函數組件分析
+        const hanning_envelope_full = q_array.map(q => {
+            const t = q * hanning_dt_sim;
+            return 0.5 * (1 - Math.cos(frequency_sim * t / cycle));
+        });
+        
+        const hanning_carrier = q_array.map(q => {
+            const t = q * hanning_dt_sim;
+            return Math.sin(frequency_sim * t);
+        });
+        
+        const hanning_full = q_array.map(q => {
+            const t = q * hanning_dt_sim;
+            const envelope = 0.5 * (1 - Math.cos(frequency_sim * t / cycle));
+            const carrier = Math.sin(frequency_sim * t);
+            return envelope * carrier;
+        });
+        
+        new Chart(document.getElementById('hanningComponents'), {
+            ...chartConfig,
+            data: {
+                labels: q_array,
+                datasets: [
+                    {
+                        label: '包絡：(1 - cos(f×t/n))',
+                        data: hanning_envelope_full,
+                        borderColor: '#f39c12',
+                        borderWidth: 3,
+                        fill: false
+                    },
+                    {
+                        label: '載波：sin(f×t)',
+                        data: hanning_carrier.map(x => x * 0.3), // 縮放以便觀看
+                        borderColor: '#e74c3c',
+                        borderWidth: 1,
+                        borderDash: [3, 3],
+                        fill: false
+                    },
+                    {
+                        label: 'Hanning結果：包絡 × 載波',
+                        data: hanning_full,
+                        borderColor: '#8e44ad',
+                        borderWidth: 2,
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                ...chartConfig.options,
+                scales: {
+                    x: { title: { display: true, text: 'Timesteps (q)' } },
+                    y: { title: { display: true, text: 'Amplitude' } }
+                }
+            }
+        });
+        
+        // 5. 複數脈衝問題展示
+        const main_carrier = q_array.map(q => Math.sin(omega_sim * q));
+        const hanning_with_envelope = q_array.map(q => {
+            if (q < t1) {
+                const t = q * hanning_dt_sim;
+                const envelope = 0.5 * (1 - Math.cos(frequency_sim * t / cycle));
+                const carrier = Math.sin(frequency_sim * t);
+                return envelope * carrier;
+            }
+            return 0;
+        });
+        
+        const combined_problematic = q_array.map((q, i) => {
+            return main_carrier[i] * (1 + hanning_with_envelope[i]); // 展示干擾效果
+        });
+        
+        new Chart(document.getElementById('complexPulse'), {
+            ...chartConfig,
+            data: {
+                labels: q_array,
+                datasets: [
+                    {
+                        label: '主載波：sin(omega_sim × q)',
+                        data: main_carrier.map(x => x * 0.3),
+                        borderColor: '#3498db',
+                        borderWidth: 1,
+                        borderDash: [5, 5],
+                        fill: false
+                    },
+                    {
+                        label: 'Hanning輸出',
+                        data: hanning_with_envelope,
+                        borderColor: '#e67e22',
+                        borderWidth: 2,
+                        fill: false
+                    },
+                    {
+                        label: '組合結果（有問題）',
+                        data: combined_problematic,
+                        borderColor: '#e74c3c',
+                        borderWidth: 3,
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                ...chartConfig.options,
+                scales: {
+                    x: { title: { display: true, text: 'Timesteps (q)' } },
+                    y: { title: { display: true, text: 'Field Amplitude' } }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
