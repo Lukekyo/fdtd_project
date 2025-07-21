@@ -56,7 +56,7 @@ def make_grid(with_structure=True):
         amplitude=1.0 + 0j,
         theta_deg=theta_deg,
         polarization_axis="x",
-        pulse=False,  # ===== 👇 改用連續波以便觀察週期 =====
+        pulse=True,  # ===== 👇 改用連續波以便觀察週期 =====
         name="source"
     )
 
@@ -66,9 +66,9 @@ def make_grid(with_structure=True):
 
     simfolder = None
     if with_structure:
-        grid[:, 0, start_z:end_z] = fdtd.Object(n=1.5, k=0, name="structure")
+        grid[:, 0, start_z:end_z] = fdtd.Object(n=1.5, k=0, name="n = 1.5")
         simfolder = grid.save_simulation("test_bloch_xz_floport")
-        print(f"添加結構：n=1.5, 厚度={(end_z-start_z)*grid_spacing*1e6:.2f}μm")
+        print(f"添加結構：n=3, 厚度={(end_z-start_z)*grid_spacing*1e6:.2f}μm")
 
     return grid, simfolder
 
@@ -195,9 +195,9 @@ if __name__ == "__main__":
         if USE_ANIMATION:
             # 帶動畫的完整模擬
             results, grid = run_simulation(
-                with_structure=True, 
-                total_steps=150,  # 減少步數以便觀察
-                animation_interval=5  # 每5步顯示一次
+                with_structure=False, 
+                total_steps=300,  # 減少步數以便觀察
+                animation_interval=10  # 每5步顯示一次
             )
         else:
             # 快速模擬，只看最終結果

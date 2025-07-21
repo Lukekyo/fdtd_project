@@ -569,6 +569,8 @@ class ComplexPlaneWave:
         self.period_sim = self.period / grid.time_step  # timesteps
         self.frequency_sim = 1.0 / self.period_sim         # 1/timestep  
         self.omega_sim = 2 * np.pi / self.period_sim       # rad/timestep
+        # 將 hanning_dt 轉成模擬步數
+        self.hanning_dt_sim = self.hanning_dt / grid.time_step
         # === 空間相位設定 計算 kx, kz ===
         kx = self.k * bd.sin(self.theta)
         kz = self.k * bd.cos(self.theta)
@@ -666,7 +668,6 @@ class ComplexPlaneWave:
         if self.pulse:
             t = q * self.grid.time_step  # 當前物理時間
             t_pulse_duration = 2 * bd.pi * self.cycle / self.omega  # 脈衝持續時間
-            
             if t < t_pulse_duration:
                 envelope = hanning(self.frequency, t, self.cycle)
             else:

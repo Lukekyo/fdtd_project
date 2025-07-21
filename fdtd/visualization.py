@@ -356,8 +356,8 @@ def visualize(
     x_ticks = list(range(0, Ny, max(1, Ny//10)))
     y_ticks = list(range(0, Nx, max(1, Nx//10)))
 
-    # plt.xticks(x_ticks, [f"{x:.1f}" for x in x_physical])
-    # plt.yticks(y_ticks, [f"{y:.1f}" for y in y_physical])
+    plt.xticks(x_ticks, [f"{x:.1f}" for x in x_physical])
+    plt.yticks(y_ticks, [f"{y:.1f}" for y in y_physical])
 
     # finalize the plot
     plt.ylabel(xlabel)
