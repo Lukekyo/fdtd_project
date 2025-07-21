@@ -1,58 +1,473 @@
-flowchart TD
-A[使用者輸入] –> A1[波長 wavelength]
-A –> A2[網格尺寸 grid_spacing]
-A –> A3[穩定性因子 0.99]
+<!DOCTYPE html>
+
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FDTD模擬完整流程圖</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
 
 ```
-A1 --> B1["物理頻率<br/>f = c/λ"]
-B1 --> B2["物理週期<br/>T = 1/f"]
-
-A2 --> C1[計算維度數 D]
-C1 --> C2["最大Courant數<br/>Cmax = 1/√D"]
-A3 --> C2
-C2 --> C3["實際Courant數<br/>C = 0.99 × Cmax"]
-
-A2 --> D1["時間步長計算<br/>Δt = C × Δx / c"]
-C3 --> D1
-D1 --> D2["時間步長 Δt"]
-
-B2 --> E1["模擬週期<br/>Tsim = T/Δt"]
-D2 --> E1
-E1 --> E2["模擬頻率<br/>fsim = 1/Tsim"]
-E2 --> E3["模擬角頻率<br/>ωsim = 2π/Tsim"]
-
-E3 --> F1[Register Grid 階段]
-F1 --> F2["計算空間相位 k·r"]
-
-F2 --> G1[時間迭代開始]
-G1 --> G2[當前時間步 q]
-G2 --> G3["時間相位<br/>φt = ωsim × q + φ0"]
-
-G3 --> H1{源類型?}
-H1 -->|Pulse| H2["物理時間<br/>t = q × Δt"]
-H2 --> H3["Hanning包絡<br/>env = hanning(t,f)"]
-H1 -->|CW| H4["連續波<br/>env = 1.0"]
-
-H3 --> I1["場計算<br/>field = A × env × exp(j(k·r + φt))"]
-H4 --> I1
-I1 --> I2["場疊加<br/>E = E + field"]
-
-I2 --> J1[Maxwell方程時間步進]
-J1 --> J2[更新磁場 H]
-J2 --> J3[更新電場 E]
-J3 --> J4{"q < 總步數?"}
-J4 -->|是| G2
-J4 -->|否| K1[模擬結束]
-
-classDef input fill:#e1f5fe,stroke:#01579b,stroke-width:2px
-classDef calc fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
-classDef key fill:#ffecb3,stroke:#e65100,stroke-width:3px
-classDef iteration fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
-classDef output fill:#fce4ec,stroke:#880e4f,stroke-width:2px
-
-class A,A1,A2,A3 input
-class B1,B2,C1,C2,C3,E1,E2,E3,F2 calc
-class D1,D2 key
-class G1,G2,G3,H1,H2,H3,H4,I1,I2,J1,J2,J3,J4 iteration
-class K1 output
+    .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 20px;
+        padding: 30px;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+    }
+    
+    .title {
+        text-align: center;
+        color: #2c3e50;
+        font-size: 2.5em;
+        margin-bottom: 10px;
+        font-weight: bold;
+    }
+    
+    .subtitle {
+        text-align: center;
+        color: #7f8c8d;
+        font-size: 1.2em;
+        margin-bottom: 30px;
+    }
+    
+    .flow-container {
+        position: relative;
+        width: 100%;
+        min-height: 1200px;
+        overflow: hidden;
+    }
+    
+    .node {
+        position: absolute;
+        border-radius: 15px;
+        padding: 15px 20px;
+        font-size: 14px;
+        font-weight: 500;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        min-width: 140px;
+        border: 2px solid transparent;
+    }
+    
+    .node:hover {
+        transform: translateY(-5px) scale(1.05);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+        z-index: 10;
+    }
+    
+    /* 輸入參數 */
+    .input {
+        background: linear-gradient(135deg, #3498db, #2980b9);
+        color: white;
+        border-color: #2980b9;
+    }
+    
+    /* 物理計算 */
+    .physics {
+        background: linear-gradient(135deg, #9b59b6, #8e44ad);
+        color: white;
+        border-color: #8e44ad;
+    }
+    
+    /* 關鍵計算 */
+    .key {
+        background: linear-gradient(135deg, #f39c12, #e67e22);
+        color: white;
+        border-color: #e67e22;
+        font-weight: bold;
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+    }
+    
+    /* 數值轉換 */
+    .numerical {
+        background: linear-gradient(135deg, #1abc9c, #16a085);
+        color: white;
+        border-color: #16a085;
+    }
+    
+    /* 時間迭代 */
+    .iteration {
+        background: linear-gradient(135deg, #27ae60, #229954);
+        color: white;
+        border-color: #229954;
+    }
+    
+    /* 決策節點 */
+    .decision {
+        background: linear-gradient(135deg, #e74c3c, #c0392b);
+        color: white;
+        border-color: #c0392b;
+        border-radius: 50%;
+        width: 120px;
+        height: 120px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    /* 結束節點 */
+    .end {
+        background: linear-gradient(135deg, #34495e, #2c3e50);
+        color: white;
+        border-color: #2c3e50;
+    }
+    
+    .arrow {
+        position: absolute;
+        z-index: 1;
+    }
+    
+    .arrow::after {
+        content: '';
+        position: absolute;
+        width: 0;
+        height: 0;
+        border-style: solid;
+    }
+    
+    .arrow-down::after {
+        border-left: 8px solid transparent;
+        border-right: 8px solid transparent;
+        border-top: 12px solid #7f8c8d;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+    
+    .arrow-right::after {
+        border-top: 8px solid transparent;
+        border-bottom: 8px solid transparent;
+        border-left: 12px solid #7f8c8d;
+        top: 50%;
+        left: 100%;
+        transform: translateY(-50%);
+    }
+    
+    .arrow-line {
+        background: #7f8c8d;
+        position: absolute;
+        z-index: 1;
+    }
+    
+    .tooltip {
+        position: absolute;
+        background: #2c3e50;
+        color: white;
+        padding: 10px 15px;
+        border-radius: 8px;
+        font-size: 13px;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s;
+        z-index: 20;
+    }
+    
+    .tooltip::after {
+        content: '';
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border-left: 5px solid transparent;
+        border-right: 5px solid transparent;
+        border-top: 5px solid #2c3e50;
+    }
+    
+    .legend {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 20px;
+        margin-top: 30px;
+        padding: 20px;
+        background: rgba(236, 240, 241, 0.8);
+        border-radius: 15px;
+    }
+    
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .legend-color {
+        width: 20px;
+        height: 20px;
+        border-radius: 5px;
+    }
+    
+    .phase-label {
+        position: absolute;
+        font-size: 18px;
+        font-weight: bold;
+        color: #2c3e50;
+        background: rgba(255,255,255,0.9);
+        padding: 8px 15px;
+        border-radius: 20px;
+        border: 2px solid #3498db;
+    }
+</style>
 ```
+
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">FDTD模擬完整流程圖</h1>
+        <p class="subtitle">從使用者輸入到數值計算的完整鏈路</p>
+
+```
+    <div class="flow-container" id="flowContainer">
+        <!-- 階段標籤 -->
+        <div class="phase-label" style="top: 10px; left: 50px;">輸入階段</div>
+        <div class="phase-label" style="top: 180px; left: 50px;">物理計算</div>
+        <div class="phase-label" style="top: 350px; left: 50px;">關鍵轉換</div>
+        <div class="phase-label" style="top: 520px; left: 50px;">數值準備</div>
+        <div class="phase-label" style="top: 700px; left: 50px;">時間迭代</div>
+        
+        <!-- 使用者輸入 -->
+        <div class="node input" style="top: 50px; left: 200px;" data-tooltip="使用者提供的三個基本參數">
+            使用者輸入
+        </div>
+        <div class="node input" style="top: 50px; left: 380px;" data-tooltip="光的波長，決定頻率特性">
+            波長<br/>wavelength
+        </div>
+        <div class="node input" style="top: 50px; left: 560px;" data-tooltip="空間網格間距，決定解析度">
+            網格尺寸<br/>grid_spacing
+        </div>
+        <div class="node input" style="top: 50px; left: 740px;" data-tooltip="數值穩定性係數，通常0.99">
+            穩定性因子<br/>0.99
+        </div>
+        
+        <!-- 物理計算 -->
+        <div class="node physics" style="top: 220px; left: 300px;" data-tooltip="f = c / λ">
+            物理頻率<br/>f = c/λ
+        </div>
+        <div class="node physics" style="top: 220px; left: 500px;" data-tooltip="T = 1 / f">
+            物理週期<br/>T = 1/f
+        </div>
+        <div class="node physics" style="top: 220px; left: 700px;" data-tooltip="2D: D=2, 3D: D=3">
+            計算維度數<br/>D
+        </div>
+        <div class="node physics" style="top: 270px; left: 850px;" data-tooltip="Cmax = 1/√D">
+            最大Courant數<br/>Cmax = 1/√D
+        </div>
+        <div class="node physics" style="top: 320px; left: 750px;" data-tooltip="C = 0.99 × Cmax">
+            實際Courant數<br/>C = 0.99 × Cmax
+        </div>
+        
+        <!-- 關鍵計算 -->
+        <div class="node key" style="top: 390px; left: 400px;" data-tooltip="FDTD的核心公式！連接空間和時間離散化">
+            時間步長計算<br/>Δt = C × Δx / c
+        </div>
+        <div class="node key" style="top: 460px; left: 400px;" data-tooltip="每個時間步的持續時間">
+            時間步長 Δt
+        </div>
+        
+        <!-- 數值轉換 -->
+        <div class="node numerical" style="top: 560px; left: 200px;" data-tooltip="Tsim = T / Δt">
+            模擬週期<br/>Tsim = T/Δt
+        </div>
+        <div class="node numerical" style="top: 560px; left: 400px;" data-tooltip="fsim = 1 / Tsim">
+            模擬頻率<br/>fsim = 1/Tsim
+        </div>
+        <div class="node numerical" style="top: 560px; left: 600px;" data-tooltip="ωsim = 2π / Tsim">
+            模擬角頻率<br/>ωsim = 2π/Tsim
+        </div>
+        <div class="node numerical" style="top: 620px; left: 750px;" data-tooltip="計算k向量">
+            空間相位<br/>k·r
+        </div>
+        
+        <!-- 時間迭代 -->
+        <div class="node iteration" style="top: 740px; left: 100px;" data-tooltip="開始時間循環">
+            時間迭代開始
+        </div>
+        <div class="node iteration" style="top: 740px; left: 280px;" data-tooltip="當前時間步數">
+            當前時間步 q
+        </div>
+        <div class="node iteration" style="top: 740px; left: 460px;" data-tooltip="φt = ωsim × q + φ0">
+            時間相位<br/>φt = ωsim × q + φ0
+        </div>
+        
+        <!-- 決策節點 -->
+        <div class="node decision" style="top: 820px; left: 420px;" data-tooltip="選擇脈衝或連續波">
+            源類型?
+        </div>
+        
+        <!-- 分支處理 -->
+        <div class="node iteration" style="top: 820px; left: 200px;" data-tooltip="t = q × Δt">
+            物理時間<br/>t = q × Δt
+        </div>
+        <div class="node iteration" style="top: 880px; left: 200px;" data-tooltip="env = hanning(t,f)">
+            Hanning包絡<br/>env = hanning(t,f)
+        </div>
+        <div class="node iteration" style="top: 820px; left: 640px;" data-tooltip="env = 1.0">
+            連續波<br/>env = 1.0
+        </div>
+        
+        <!-- 場更新 -->
+        <div class="node iteration" style="top: 980px; left: 300px;" data-tooltip="計算電磁場">
+            場計算<br/>field = A × env × exp(j(k·r + φt))
+        </div>
+        <div class="node iteration" style="top: 1040px; left: 300px;" data-tooltip="疊加到現有場">
+            場疊加<br/>E = E + field
+        </div>
+        
+        <!-- Maxwell方程 -->
+        <div class="node iteration" style="top: 1100px; left: 150px;" data-tooltip="求解Maxwell方程組">
+            Maxwell方程<br/>時間步進
+        </div>
+        <div class="node iteration" style="top: 1100px; left: 300px;" data-tooltip="更新磁場">
+            更新磁場 H
+        </div>
+        <div class="node iteration" style="top: 1100px; left: 450px;" data-tooltip="更新電場">
+            更新電場 E
+        </div>
+        
+        <!-- 循環判斷 -->
+        <div class="node decision" style="top: 1160px; left: 550px;" data-tooltip="檢查是否完成所有時間步">
+            q < 總步數?
+        </div>
+        
+        <!-- 結束 -->
+        <div class="node end" style="top: 1220px; left: 700px;" data-tooltip="模擬完成，輸出結果">
+            模擬結束
+        </div>
+        
+        <!-- 連接線 -->
+        <div class="arrow-line" style="top: 100px; left: 340px; width: 2px; height: 40px;"></div>
+        <div class="arrow-line" style="top: 100px; left: 520px; width: 2px; height: 40px;"></div>
+        <div class="arrow-line" style="top: 100px; left: 700px; width: 2px; height: 40px;"></div>
+        
+        <div class="arrow-line" style="top: 270px; left: 340px; width: 2px; height: 40px;"></div>
+        <div class="arrow-line" style="top: 270px; left: 540px; width: 2px; height: 40px;"></div>
+        <div class="arrow-line" style="top: 270px; left: 740px; width: 2px; height: 30px;"></div>
+        <div class="arrow-line" style="top: 300px; left: 740px; width: 130px; height: 2px;"></div>
+        <div class="arrow-line" style="top: 320px; left: 790px; width: 2px; height: 30px;"></div>
+        <div class="arrow-line" style="top: 370px; left: 790px; width: 2px; height: 30px;"></div>
+        
+        <div class="arrow-line" style="top: 430px; left: 440px; width: 2px; height: 40px;"></div>
+        <div class="arrow-line" style="top: 510px; left: 440px; width: 2px; height: 60px;"></div>
+        
+        <div class="arrow-line" style="top: 610px; left: 240px; width: 2px; height: 40px;"></div>
+        <div class="arrow-line" style="top: 610px; left: 440px; width: 2px; height: 40px;"></div>
+        <div class="arrow-line" style="top: 610px; left: 640px; width: 2px; height: 40px;"></div>
+        
+        <div class="arrow-line" style="top: 790px; left: 140px; width: 2px; height: 40px;"></div>
+        <div class="arrow-line" style="top: 790px; left: 320px; width: 2px; height: 40px;"></div>
+        <div class="arrow-line" style="top: 790px; left: 500px; width: 2px; height: 40px;"></div>
+        
+        <!-- 更多連接線... -->
+    </div>
+    
+    <div class="tooltip" id="tooltip"></div>
+    
+    <div class="legend">
+        <div class="legend-item">
+            <div class="legend-color input"></div>
+            <span>使用者輸入</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color physics"></div>
+            <span>物理計算</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color key"></div>
+            <span>關鍵轉換</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color numerical"></div>
+            <span>數值準備</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color iteration"></div>
+            <span>時間迭代</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color decision"></div>
+            <span>決策節點</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color end"></div>
+            <span>結束</span>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 滑鼠懸停顯示工具提示
+    const nodes = document.querySelectorAll('.node');
+    const tooltip = document.getElementById('tooltip');
+    
+    nodes.forEach(node => {
+        node.addEventListener('mouseenter', (e) => {
+            const tooltipText = e.target.getAttribute('data-tooltip');
+            if (tooltipText) {
+                tooltip.textContent = tooltipText;
+                tooltip.style.opacity = '1';
+            }
+        });
+        
+        node.addEventListener('mousemove', (e) => {
+            tooltip.style.left = e.pageX + 10 + 'px';
+            tooltip.style.top = e.pageY - 30 + 'px';
+        });
+        
+        node.addEventListener('mouseleave', () => {
+            tooltip.style.opacity = '0';
+        });
+    });
+    
+    // 點擊節點高亮相關連接
+    nodes.forEach(node => {
+        node.addEventListener('click', function() {
+            // 移除之前的高亮
+            nodes.forEach(n => n.style.transform = '');
+            
+            // 高亮當前節點
+            this.style.transform = 'scale(1.1)';
+            
+            // 添加一些互動效果
+            this.style.boxShadow = '0 0 20px rgba(52, 152, 219, 0.6)';
+            
+            setTimeout(() => {
+                this.style.transform = '';
+                this.style.boxShadow = '';
+            }, 1000);
+        });
+    });
+    
+    // 添加一些動畫效果
+    function addFlowAnimation() {
+        const keyNode = document.querySelector('.key');
+        setInterval(() => {
+            keyNode.style.boxShadow = '0 0 30px rgba(243, 156, 18, 0.8)';
+            setTimeout(() => {
+                keyNode.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)';
+            }, 500);
+        }, 2000);
+    }
+    
+    // 頁面載入後執行動畫
+    window.addEventListener('load', addFlowAnimation);
+</script>
+```
+
+</body>
+</html>
