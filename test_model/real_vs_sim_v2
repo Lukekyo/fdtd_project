@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>物理 vs FDTD模擬對比表</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+```
+    .container {
+        max-width: 1000px;
+        margin: 0 auto;
+        background: white;
+        padding: 30px;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    h1 {
+        text-align: center;
+        color: #2c3e50;
+        border-bottom: 3px solid #3498db;
+        padding-bottom: 10px;
+    }
+    
+    .main-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0;
+        font-size: 14px;
+    }
+    
+    .main-table th {
+        background: #3498db;
+        color: white;
+        padding: 12px;
+        text-align: center;
+        font-weight: bold;
+    }
+    
+    .main-table td {
+        padding: 10px;
+        text-align: center;
+        border: 1px solid #ddd;
+    }
+    
+    .main-table tr:nth-child(even) {
+        background: #f9f9f9;
+    }
+    
+    .physics-col {
+        background: #e8f4fd !important;
+        font-weight: bold;
+    }
+    
+    .simulation-col {
+        background: #ffeaa7 !important;
+        font-weight: bold;
+    }
+    
+    .conversion-col {
+        background: #d1f2eb !important;
+        font-weight: bold;
+    }
+    
+    .example-box {
+        background: #ecf0f1;
+        border-left: 4px solid #3498db;
+        padding: 15px;
+        margin: 20px 0;
+    }
+    
+    .formula {
+        background: #2c3e50;
+        color: white;
+        padding: 10px;
+        border-radius: 5px;
+        font-family: monospace;
+        margin: 10px 0;
+    }
+    
+    .highlight {
+        background: #f1c40f;
+        padding: 2px 5px;
+        border-radius: 3px;
+        font-weight: bold;
+    }
+    
+    .section {
+        margin: 30px 0;
+    }
+    
+    h2 {
+        color: #2c3e50;
+        border-left: 4px solid #3498db;
+        padding-left: 10px;
+    }
+</style>
+```
+
+</head>
+<body>
+    <div class="container">
+        <h1>🌊 物理世界 vs FDTD模擬世界 參數對比</h1>
+
+```
+    <!-- 主要對比表格 -->
+    <div class="section">
+        <h2>📊 核心參數對比表</h2>
+        <table class="main-table">
+            <thead>
+                <tr>
+                    <th style="width: 15%;">參數</th>
+                    <th style="width: 30%;">物理世界（連續）</th>
+                    <th style="width: 30%;">FDTD模擬（離散）</th>
+                    <th style="width: 25%;">轉換關係</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>時間</strong></td>
+                    <td class="physics-col">
+                        t (秒)<br>
+                        連續變數<br>
+                        t ∈ [0, ∞)
+                    </td>
+                    <td class="simulation-col">
+                        q (timesteps)<br>
+                        離散整數<br>
+                        q ∈ {0, 1, 2, 3, ...}
+                    </td>
+                    <td class="conversion-col">
+                        <span class="highlight">t = q × Δt</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>週期</strong></td>
+                    <td class="physics-col">
+                        T<sub>物理</sub> (秒)<br>
+                        T = λ/c<br>
+                        ≈ 5.17×10⁻¹⁵ s
+                    </td>
+                    <td class="simulation-col">
+                        T<sub>模擬</sub> (timesteps)<br>
+                        整數步數<br>
+                        ≈ 33.4 steps
+                    </td>
+                    <td class="conversion-col">
+                        <span class="highlight">T<sub>sim</sub> = T<sub>phys</sub> / Δt</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>頻率</strong></td>
+                    <td class="physics-col">
+                        f<sub>物理</sub> (Hz)<br>
+                        f = c/λ<br>
+                        ≈ 1.94×10¹⁴ Hz
+                    </td>
+                    <td class="simulation-col">
+                        f<sub>模擬</sub> (1/timestep)<br>
+                        f = 1/T<sub>模擬</sub><br>
+                        ≈ 0.03 /timestep
+                    </td>
+                    <td class="conversion-col">
+                        <span class="highlight">f<sub>sim</sub> = f<sub>phys</sub> × Δt</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>角頻率</strong></td>
+                    <td class="physics-col">
+                        ω<sub>物理</sub> (rad/s)<br>
+                        ω = 2πf<br>
+                        ≈ 1.22×10¹⁵ rad/s
+                    </td>
+                    <td class="simulation-col">
+                        ω<sub>模擬</sub> (rad/timestep)<br>
+                        ω = 2π/T<sub>模擬</sub><br>
+                        ≈ 0.188 rad/timestep
+                    </td>
+                    <td class="conversion-col">
+                        <span class="highlight">ω<sub>sim</sub> = ω<sub>phys</sub> × Δt</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>波形</strong></td>
+                    <td class="physics-col">
+                        E(t) = E₀cos(ωt + φ)<br>
+                        連續函數
+                    </td>
+                    <td class="simulation-col">
+                        E[q] = E₀cos(ω<sub>sim</sub>q + φ)<br>
+                        離散序列
+                    </td>
+                    <td class="conversion-col">
+                        <span class="highlight">E[q] = E(q×Δt)</span>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- 1550nm示例 -->
+    <div class="section">
+        <h2>🔢 1550nm光波具體數值示例</h2>
+        <div class="example-box">
+            <strong>📐 設定參數：</strong>
+            <div class="formula">
+                波長: λ = 1550 nm = 1.55×10⁻⁶ m<br>
+                網格間距: Δx = 155 nm = 1.55×10⁻⁷ m (每波長10格點)<br>
+                Courant數: C = 0.5<br>
+                時間步長: Δt = C × Δx / c = 2.58×10⁻¹⁶ s
+            </div>
+            
+            <table class="main-table" style="margin-top: 15px;">
+                <tr>
+                    <th>計算項目</th>
+                    <th>物理值</th>
+                    <th>模擬值</th>
+                    <th>轉換驗證</th>
+                </tr>
+                <tr>
+                    <td>頻率</td>
+                    <td>f = 3×10⁸/1.55×10⁻⁶<br>= 1.94×10¹⁴ Hz</td>
+                    <td>f<sub>sim</sub> = 1.94×10¹⁴ × 2.58×10⁻¹⁶<br>= 0.05 /timestep</td>
+                    <td>✅ f<sub>sim</sub> = f × Δt</td>
+                </tr>
+                <tr>
+                    <td>週期</td>
+                    <td>T = 1/f<br>= 5.17×10⁻¹⁵ s</td>
+                    <td>T<sub>sim</sub> = 5.17×10⁻¹⁵ / 2.58×10⁻¹⁶<br>= 20 timesteps</td>
+                    <td>✅ T<sub>sim</sub> = T / Δt</td>
+                </tr>
+                <tr>
+                    <td>角頻率</td>
+                    <td>ω = 2πf<br>= 1.22×10¹⁵ rad/s</td>
+                    <td>ω<sub>sim</sub> = 2π/20<br>= 0.314 rad/timestep</td>
+                    <td>✅ ω<sub>sim</sub> = ω × Δt</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+    
+    <!-- ComplexPlaneWave應用 -->
+    <div class="section">
+        <h2>⚡ 在ComplexPlaneWave中的應用</h2>
+        
+        <div class="example-box">
+            <strong>🔧 __init__ 階段 (計算物理參數):</strong>
+            <div class="formula">
+                self.frequency = c / wavelength          # Hz (物理頻率)<br>
+                self.period = 1.0 / self.frequency       # 秒 (物理週期)<br>
+                self.omega = 2 * π * self.frequency       # rad/s (物理角頻率)
+            </div>
+        </div>
+        
+        <div class="example-box">
+            <strong>📡 _register_grid 階段 (轉換模擬參數):</strong>
+            <div class="formula">
+                self.period_sim = self.period / grid.time_step      # timesteps<br>
+                self.frequency_sim = 1.0 / self.period_sim         # 1/timestep<br>
+                self.omega_sim = 2 * π / self.period_sim           # rad/timestep
+            </div>
+        </div>
+        
+        <div class="example-box">
+            <strong>🌊 update_E 階段 (應用到場更新):</strong>
+            <div class="formula">
+                q = grid.time_steps_passed                         # timesteps<br>
+                time_phase = self.omega_sim * q + phase_shift      # 使用模擬角頻率<br><br>
+                
+                # 脈衝包絡使用物理時間確保單位正確<br>
+                t = q * grid.time_step                             # 轉回物理時間<br>
+                envelope = hanning(self.frequency, t, cycle)       # 使用物理頻率
+            </div>
+        </div>
+    </div>
+    
+    <!-- 關鍵理解 -->
+    <div class="section">
+        <h2>💡 關鍵理解點</h2>
+        <div class="example-box">
+            <ul>
+                <li><strong>物理頻率</strong>：用於物理公式、能量計算、與現實對應</li>
+                <li><strong>模擬頻率</strong>：用於FDTD數值計算、控制波形重複</li>
+                <li><strong>時間步長Δt</strong>：是物理世界到數位世界的橋樑</li>
+                <li><strong>period參數</strong>：告訴FDTD「一個物理週期需要多少時間步」</li>
+                <li><strong>兩種方法</strong>：在數學上完全等價，選擇不同只是計算便利性</li>
+            </ul>
+        </div>
+    </div>
+    
+    <div style="text-align: center; margin-top: 30px; padding: 15px; background: #3498db; color: white; border-radius: 5px;">
+        <strong>🎯 統一的設計讓物理直觀與數值穩定完美結合！</strong>
+    </div>
+</div>
+```
+
+</body>
+</html>

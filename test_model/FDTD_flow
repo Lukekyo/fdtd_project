@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FDTD模擬流程圖</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+        }
+
+```
+    .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    
+    .title {
+        text-align: center;
+        color: #333;
+        font-size: 24px;
+        margin-bottom: 30px;
+    }
+    
+    .flow-step {
+        display: flex;
+        align-items: center;
+        margin-bottom: 15px;
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 5px solid #3498db;
+    }
+    
+    .step-number {
+        background: #3498db;
+        color: white;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        margin-right: 15px;
+        flex-shrink: 0;
+    }
+    
+    .step-content {
+        flex: 1;
+    }
+    
+    .step-title {
+        font-weight: bold;
+        color: #2c3e50;
+        margin-bottom: 5px;
+    }
+    
+    .step-formula {
+        background: #ecf0f1;
+        padding: 8px 12px;
+        border-radius: 5px;
+        font-family: monospace;
+        margin: 5px 0;
+        color: #34495e;
+    }
+    
+    .step-desc {
+        color: #666;
+        font-size: 14px;
+    }
+    
+    /* 不同階段的顏色 */
+    .input { border-left-color: #3498db; }
+    .input .step-number { background: #3498db; }
+    
+    .physics { border-left-color: #9b59b6; }
+    .physics .step-number { background: #9b59b6; }
+    
+    .key { border-left-color: #e67e22; }
+    .key .step-number { background: #e67e22; }
+    
+    .numerical { border-left-color: #1abc9c; }
+    .numerical .step-number { background: #1abc9c; }
+    
+    .iteration { border-left-color: #27ae60; }
+    .iteration .step-number { background: #27ae60; }
+    
+    .phase-header {
+        text-align: center;
+        font-size: 18px;
+        font-weight: bold;
+        margin: 25px 0 15px 0;
+        padding: 10px;
+        border-radius: 8px;
+        color: white;
+    }
+    
+    .phase-input { background: #3498db; }
+    .phase-physics { background: #9b59b6; }
+    .phase-key { background: #e67e22; }
+    .phase-numerical { background: #1abc9c; }
+    .phase-iteration { background: #27ae60; }
+    
+    .arrow {
+        text-align: center;
+        font-size: 20px;
+        color: #95a5a6;
+        margin: 10px 0;
+    }
+</style>
+```
+
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">FDTD模擬完整流程圖</h1>
+
+```
+    <div class="phase-header phase-input">📥 使用者輸入階段</div>
+    
+    <div class="flow-step input">
+        <div class="step-number">1</div>
+        <div class="step-content">
+            <div class="step-title">使用者輸入參數</div>
+            <div class="step-desc">• 波長 (wavelength)<br/>• 網格尺寸 (grid_spacing)<br/>• 穩定性因子 (預設0.99)</div>
+        </div>
+    </div>
+    
+    <div class="arrow">⬇️</div>
+    
+    <div class="phase-header phase-physics">🔬 物理參數計算</div>
+    
+    <div class="flow-step physics">
+        <div class="step-number">2</div>
+        <div class="step-content">
+            <div class="step-title">計算物理頻率和週期</div>
+            <div class="step-formula">物理頻率 f = c / wavelength</div>
+            <div class="step-formula">物理週期 T = 1 / f</div>
+            <div class="step-desc">從波長計算對應的頻率特性</div>
+        </div>
+    </div>
+    
+    <div class="flow-step physics">
+        <div class="step-number">3</div>
+        <div class="step-content">
+            <div class="step-title">計算Courant數</div>
+            <div class="step-formula">最大Courant數 = 1/√D (D是維度)</div>
+            <div class="step-formula">實際Courant數 = 0.99 × 最大Courant數</div>
+            <div class="step-desc">確保數值穩定性</div>
+        </div>
+    </div>
+    
+    <div class="arrow">⬇️</div>
+    
+    <div class="phase-header phase-key">🎯 關鍵轉換計算</div>
+    
+    <div class="flow-step key">
+        <div class="step-number">4</div>
+        <div class="step-content">
+            <div class="step-title">計算時間步長 (核心公式！)</div>
+            <div class="step-formula">timestep = courant_number × grid_spacing / c</div>
+            <div class="step-desc">這是連接空間和時間離散化的關鍵橋樑</div>
+        </div>
+    </div>
+    
+    <div class="arrow">⬇️</div>
+    
+    <div class="phase-header phase-numerical">🔢 數值頻率轉換</div>
+    
+    <div class="flow-step numerical">
+        <div class="step-number">5</div>
+        <div class="step-content">
+            <div class="step-title">轉換到數值頻率</div>
+            <div class="step-formula">模擬週期 = 物理週期 / timestep</div>
+            <div class="step-formula">模擬頻率 = 1 / 模擬週期</div>
+            <div class="step-formula">模擬角頻率 = 2π / 模擬週期</div>
+            <div class="step-desc">從物理單位轉換到數值計算單位</div>
+        </div>
+    </div>
+    
+    <div class="flow-step numerical">
+        <div class="step-number">6</div>
+        <div class="step-content">
+            <div class="step-title">計算空間相位</div>
+            <div class="step-formula">空間相位 = k·r</div>
+            <div class="step-desc">計算波向量在網格中的相位分布</div>
+        </div>
+    </div>
+    
+    <div class="arrow">⬇️</div>
+    
+    <div class="phase-header phase-iteration">🔄 時間迭代循環</div>
+    
+    <div class="flow-step iteration">
+        <div class="step-number">7</div>
+        <div class="step-content">
+            <div class="step-title">時間迭代開始</div>
+            <div class="step-formula">當前時間步 q = time_steps_passed</div>
+            <div class="step-formula">時間相位 = 模擬角頻率 × q + 初始相位</div>
+            <div class="step-desc">每個時間步的相位計算</div>
+        </div>
+    </div>
+    
+    <div class="flow-step iteration">
+        <div class="step-number">8</div>
+        <div class="step-content">
+            <div class="step-title">包絡函數處理</div>
+            <div class="step-formula">如果是Pulse: 包絡 = hanning(物理時間, 物理頻率)</div>
+            <div class="step-formula">如果是CW: 包絡 = 1.0</div>
+            <div class="step-desc">選擇脈衝或連續波模式</div>
+        </div>
+    </div>
+    
+    <div class="flow-step iteration">
+        <div class="step-number">9</div>
+        <div class="step-content">
+            <div class="step-title">場更新</div>
+            <div class="step-formula">field = A × 包絡 × exp(j(空間相位 + 時間相位))</div>
+            <div class="step-formula">E = E + field</div>
+            <div class="step-desc">更新電磁場並疊加到網格</div>
+        </div>
+    </div>
+    
+    <div class="flow-step iteration">
+        <div class="step-number">10</div>
+        <div class="step-content">
+            <div class="step-title">Maxwell方程求解</div>
+            <div class="step-formula">更新磁場 H → 更新電場 E</div>
+            <div class="step-desc">求解Maxwell方程組，直到模擬完成</div>
+        </div>
+    </div>
+    
+    <div class="arrow">🏁</div>
+    
+    <div style="text-align: center; padding: 20px; background: #34495e; color: white; border-radius: 8px; font-weight: bold;">
+        模擬結束 - 輸出結果
+    </div>
+</div>
+```
+
+</body>
+</html>

@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>脈衝結構圖像化說明</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .chart-container {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .explanation {
+            background: #e8f4f8;
+            padding: 15px;
+            margin: 15px 0;
+            border-left: 4px solid #2196F3;
+            border-radius: 5px;
+        }
+        .formula {
+            background: #f0f8ff;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            text-align: center;
+            font-size: 16px;
+        }
+        .highlight {
+            background: #fff3cd;
+            padding: 10px;
+            border-radius: 5px;
+            border-left: 4px solid #ffc107;
+        }
+        h2 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>脈衝結構圖像化說明</h1>
+
+```
+    <h2>1. 脈衝 = 載波 × 包絡</h2>
+    
+    <div class="grid">
+        <div class="chart-container">
+            <h3>載波 (Carrier Wave)</h3>
+            <canvas id="carrierChart" width="400" height="200"></canvas>
+            <div class="explanation">
+                <strong>載波頻率</strong>：決定振盪的快慢<br>
+                頻率 = c / λ = 3×10⁸ / 1550×10⁻⁹ ≈ 1.94×10¹⁴ Hz
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <h3>包絡 (Envelope)</h3>
+            <canvas id="envelopeChart" width="400" height="200"></canvas>
+            <div class="explanation">
+                <strong>包絡函數</strong>：決定脈衝的形狀和持續時間<br>
+                使用Hanning窗：平滑的開始和結束
+            </div>
+        </div>
+    </div>
+    
+    <div class="chart-container">
+        <h3>完整脈衝 = 載波 × 包絡</h3>
+        <canvas id="pulseChart" width="800" height="300"></canvas>
+        <div class="formula">
+            E(z,t) = A × cos(ωt - kz + φ) × envelope(t)
+        </div>
+    </div>
+    
+    <h2>2. 從您的FDTD結果分析</h2>
+    
+    <div class="chart-container">
+        <h3>Z截面分析 (模擬您的圖2)</h3>
+        <canvas id="fdtdChart" width="800" height="300"></canvas>
+        <div class="highlight">
+            <strong>關鍵觀察</strong>：
+            <ul>
+                <li>脈衝只出現在特定位置 (z ≈ 175-200 grid)</li>
+                <li>脈衝內部有細微振盪 → 這就是載波！</li>
+                <li>振盪間距應該等於空間波長 λ/n</li>
+            </ul>
+        </div>
+    </div>
+    
+    <h2>3. 載波頻率計算方法</h2>
+    
+    <div class="explanation">
+        <h4>方法1：從時間domain</h4>
+        <div class="formula">
+            載波頻率 = c / (n × λ) = 3×10⁸ / (1.0 × 1550×10⁻⁹) ≈ 1.94×10¹⁴ Hz
+        </div>
+        
+        <h4>方法2：從空間振盪測量</h4>
+        <div class="formula">
+            空間波長 = λ/n = 1550 nm<br>
+            在20nm網格中 ≈ 77.5 grid points<br>
+            如果測量到peak間距 ≈ 75-80 grid → 載波頻率正確！
+        </div>
+    </div>
+    
+    <h2>4. 脈衝內部振盪的物理意義</h2>
+    
+    <div class="grid">
+        <div class="explanation">
+            <h4>🌊 載波振盪</h4>
+            <ul>
+                <li><strong>頻率</strong>：由光的波長決定</li>
+                <li><strong>相位</strong>：隨時間和空間變化</li>
+                <li><strong>振幅</strong>：被包絡函數調制</li>
+            </ul>
+        </div>
+        
+        <div class="explanation">
+            <h4>📦 包絡調制</h4>
+            <ul>
+                <li><strong>形狀</strong>：Hanning窗 (平滑上升下降)</li>
+                <li><strong>寬度</strong>：cycle × period</li>
+                <li><strong>位置</strong>：源的位置</li>
+            </ul>
+        </div>
+    </div>
+    
+    <div class="highlight">
+        <h3>🎯 驗證您的結果</h3>
+        <p><strong>從圖2的Z截面：</strong></p>
+        <ol>
+            <li>測量脈衝內部相鄰peak的間距</li>
+            <li>換算成物理距離：間距 × 20nm</li>
+            <li>應該約等於1550nm</li>
+            <li>如果接近 → 載波頻率正確！</li>
+        </ol>
+    </div>
+</div>
+
+<script>
+    // 設定共同參數
+    const points = 1000;
+    const timeRange = 4 * Math.PI;
+    const time = Array.from({length: points}, (_, i) => i * timeRange / points);
+    
+    // 載波參數
+    const omega = 10; // 角頻率
+    const carrier = time.map(t => Math.cos(omega * t));
+    
+    // 包絡參數 (Hanning窗)
+    const pulseWidth = timeRange * 0.3;
+    const envelope = time.map(t => {
+        if (t > timeRange * 0.35 && t < timeRange * 0.65) {
+            const relativeTime = (t - timeRange * 0.35) / pulseWidth;
+            return 0.5 * (1 - Math.cos(2 * Math.PI * relativeTime));
+        }
+        return 0;
+    });
+    
+    // 完整脈衝
+    const pulse = time.map((t, i) => carrier[i] * envelope[i]);
+    
+    // FDTD模擬結果 (類似您的圖2)
+    const zGrid = Array.from({length: 300}, (_, i) => i);
+    const fdtdPulse = zGrid.map(z => {
+        if (z > 175 && z < 200) {
+            const cycles = 3; // 脈衝內部的載波週期數
+            const phaseInPulse = 2 * Math.PI * cycles * (z - 175) / (200 - 175);
+            const envelopeAmp = Math.sin(Math.PI * (z - 175) / (200 - 175));
+            return 0.7 * Math.cos(phaseInPulse) * envelopeAmp;
+        }
+        return 0;
+    });
+    
+    // 圖表配置
+    const chartConfig = {
+        type: 'line',
+        options: {
+            responsive: true,
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: '振幅'
+                    }
+                }
+            },
+            elements: {
+                point: {
+                    radius: 0
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    };
+    
+    // 載波圖
+    new Chart(document.getElementById('carrierChart'), {
+        ...chartConfig,
+        data: {
+            labels: time.map(t => (t / Math.PI).toFixed(1)),
+            datasets: [{
+                data: carrier,
+                borderColor: '#e74c3c',
+                borderWidth: 2,
+                fill: false
+            }]
+        },
+        options: {
+            ...chartConfig.options,
+            scales: {
+                ...chartConfig.options.scales,
+                x: {
+                    title: {
+                        display: true,
+                        text: '時間 (π單位)'
+                    }
+                }
+            }
+        }
+    });
+    
+    // 包絡圖
+    new Chart(document.getElementById('envelopeChart'), {
+        ...chartConfig,
+        data: {
+            labels: time.map(t => (t / Math.PI).toFixed(1)),
+            datasets: [{
+                data: envelope,
+                borderColor: '#3498db',
+                borderWidth: 3,
+                fill: true,
+                backgroundColor: 'rgba(52, 152, 219, 0.2)'
+            }]
+        },
+        options: {
+            ...chartConfig.options,
+            scales: {
+                ...chartConfig.options.scales,
+                x: {
+                    title: {
+                        display: true,
+                        text: '時間 (π單位)'
+                    }
+                }
+            }
+        }
+    });
+    
+    // 完整脈衝圖
+    new Chart(document.getElementById('pulseChart'), {
+        ...chartConfig,
+        data: {
+            labels: time.map(t => (t / Math.PI).toFixed(1)),
+            datasets: [
+                {
+                    label: '載波',
+                    data: carrier.map(c => c * 0.3),
+                    borderColor: '#e74c3c',
+                    borderWidth: 1,
+                    fill: false,
+                    borderDash: [5, 5]
+                },
+                {
+                    label: '包絡',
+                    data: envelope,
+                    borderColor: '#3498db',
+                    borderWidth: 2,
+                    fill: false
+                },
+                {
+                    label: '脈衝 = 載波 × 包絡',
+                    data: pulse,
+                    borderColor: '#27ae60',
+                    borderWidth: 3,
+                    fill: false
+                }
+            ]
+        },
+        options: {
+            ...chartConfig.options,
+            plugins: {
+                legend: {
+                    display: true
+                }
+            },
+            scales: {
+                ...chartConfig.options.scales,
+                x: {
+                    title: {
+                        display: true,
+                        text: '時間 (π單位)'
+                    }
+                }
+            }
+        }
+    });
+    
+    // FDTD結果圖
+    new Chart(document.getElementById('fdtdChart'), {
+        ...chartConfig,
+        data: {
+            labels: zGrid,
+            datasets: [{
+                data: fdtdPulse,
+                borderColor: '#9b59b6',
+                borderWidth: 2,
+                fill: false
+            }]
+        },
+        options: {
+            ...chartConfig.options,
+            scales: {
+                ...chartConfig.options.scales,
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Z Grid Points'
+                    }
+                }
+            }
+        }
+    });
+</script>
+```
+
+</body>
+</html>

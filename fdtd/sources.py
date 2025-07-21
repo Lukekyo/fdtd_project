@@ -666,12 +666,17 @@ class ComplexPlaneWave:
         
         # 脈衝包絡計算（統一使用物理時間）
         if self.pulse:
-            t = q * self.grid.time_step  # 當前物理時間
-            t_pulse_duration = 2 * bd.pi * self.cycle / self.omega  # 脈衝持續時間
-            if t < t_pulse_duration:
-                envelope = hanning(self.frequency, t, self.cycle)
+            t1 = int(2 * bd.pi / (self.frequency_sim * self.hanning_dt_sim / self.cycle))
+            if q < t1:
+                envelope = hanning(self.frequency_sim, q * self.hanning_dt_sim, self.cycle)
             else:
                 envelope = 0
+            # t = q * self.grid.time_step  # 當前物理時間
+            # t_pulse_duration = 2 * bd.pi * self.cycle / self.omega  # 脈衝持續時間
+            # if t < t_pulse_duration:
+            #     envelope = hanning(self.frequency, t, self.cycle)
+            # else:
+            #     envelope = 0
         else:
             envelope = 1
         
