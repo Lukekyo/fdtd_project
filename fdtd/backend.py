@@ -131,6 +131,8 @@ class NumpyBackend(Backend):
     min = staticmethod(numpy.min)
     """ min element in array """
 
+    argmax = staticmethod(numpy.argmax)
+
     stack = staticmethod(numpy.stack)
     """ stack multiple arrays """
 
@@ -299,6 +301,8 @@ if TORCH_AVAILABLE:
 
         min = staticmethod(torch.min)
         """ max element in array """
+
+        argmax = staticmethod(torch.argmax)
 
         stack = staticmethod(torch.stack)
         """ stack multiple arrays """

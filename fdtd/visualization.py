@@ -139,7 +139,7 @@ def visualize(
         bbx, bby = _BlochBoundaryY, _BlochBoundaryZ
         pmlxl, pmlxh, pmlyl, pmlyh = _PMLYlow, _PMLYhigh, _PMLZlow, _PMLZhigh
         grid_energy = bd.real(grid.E[x, :, :, 0])
-        print("Visualizing YZ plane at x =", x)
+        # print("Visualizing YZ plane at x =", x)
     elif y is not None:
         assert grid.Nx > 1 and grid.Nz > 1
         xlabel, ylabel = "z (um)", "x (um)"
@@ -148,7 +148,7 @@ def visualize(
         bbx, bby = _BlochBoundaryZ, _BlochBoundaryX
         pmlxl, pmlxh, pmlyl, pmlyh = _PMLZlow, _PMLZhigh, _PMLXlow, _PMLXhigh
         grid_energy = bd.real(grid.E[:, y, :, 0]).T  # Ex 分量
-        print("Visualizing XZ plane at y =", y)
+        # print("Visualizing XZ plane at y =", y)
     elif z is not None:
         assert grid.Nx > 1 and grid.Ny > 1
         xlabel, ylabel = "x (um)", "y (um)"
@@ -157,7 +157,7 @@ def visualize(
         bbx, bby = _BlochBoundaryX, _BlochBoundaryY
         pmlxl, pmlxh, pmlyl, pmlyh = _PMLXlow, _PMLXhigh, _PMLYlow, _PMLYhigh
         grid_energy = bd.real(grid.E[:, :, z, 0])
-        print("Visualizing XY plane at z =", z)
+        # print("Visualizing XY plane at z =", z)
     else:
         raise ValueError("Visualization only works for 2D grids")
 

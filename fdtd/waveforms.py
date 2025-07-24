@@ -8,6 +8,10 @@ import numpy as np
 def hanning(f, t, n):
     return (1 / 2) * (1 - cos(f * t / n)) * (sin(f * t))
 
+# For Hanning window pulses
+def hanning2(f, t, n):
+    return (1 / 2) * (1 - cos(f * t / n))
+
 
 """
 
