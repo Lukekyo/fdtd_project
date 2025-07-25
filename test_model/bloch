@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bloch邊界波傳播方向分析</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255,255,255,0.1);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+        .title {
+            text-align: center;
+            font-size: 2.5em;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .scenario-box {
+            background: rgba(255,255,255,0.9);
+            border-radius: 15px;
+            padding: 25px;
+            margin: 20px 0;
+            color: #333;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .wave-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 30px 0;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 15px;
+            border: 3px solid #3498db;
+        }
+        .boundary {
+            width: 80px;
+            height: 120px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            font-weight: bold;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .left-boundary {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+        }
+        .right-boundary {
+            background: linear-gradient(135deg, #e67e22, #d35400);
+            color: white;
+        }
+        .simulation-area {
+            flex: 1;
+            margin: 0 20px;
+            padding: 30px;
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            border-radius: 15px;
+            text-align: center;
+            position: relative;
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .wave-arrow {
+            font-size: 3em;
+            margin: 10px 0;
+            animation: pulse 2s infinite;
+        }
+        .plus-k { color: #27ae60; }
+        .minus-k { color: #e74c3c; }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        
+        .formula-box {
+            background: linear-gradient(135deg, #8e44ad, #9b59b6);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            margin: 15px 0;
+            font-family: 'Times New Roman', serif;
+            font-size: 1.2em;
+            text-align: center;
+            box-shadow: 0 8px 25px rgba(142, 68, 173, 0.3);
+        }
+        .explanation-highlight {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+            font-weight: bold;
+            box-shadow: 0 8px 25px rgba(46, 204, 113, 0.3);
+        }
+        .wave-direction {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 15px 0;
+            font-size: 1.1em;
+            font-weight: bold;
+        }
+        .phase-factor {
+            background: #f39c12;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            margin: 0 10px;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            box-shadow: 0 3px 10px rgba(243, 156, 18, 0.4);
+        }
+        .correct-mark {
+            color: #27ae60;
+            font-size: 2em;
+            font-weight: bold;
+        }
+        .period-label {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #34495e;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="title">🎯 您的理解完全正確！</div>
+        
+        <div class="scenario-box">
+            <h2>✅ 正確的物理圖像</h2>
+            
+            <div class="wave-container">
+                <div class="boundary left-boundary">
+                    <div>左邊界</div>
+                    <div style="font-size: 0.8em;">x = 0</div>
+                    <div style="margin-top: 10px;">接收</div>
+                    <div class="wave-arrow minus-k">←</div>
+                    <div style="font-size: 0.8em;">-k 方向波</div>
+                </div>
+                
+                <div class="simulation-area">
+                    <div class="period-label">一個 Period (L)</div>
+                    <div style="font-size: 1.3em; font-weight: bold;">模擬區域</div>
+                    <div style="font-size: 1em; margin: 10px 0;">斜入射平面波</div>
+                    <div class="wave-direction">
+                        <span class="plus-k">+k 方向 →</span>
+                        <span style="margin: 0 20px;">和</span>
+                        <span class="minus-k">← -k 方向</span>
+                    </div>
+                </div>
+                
+                <div class="boundary right-boundary">
+                    <div>右邊界</div>
+                    <div style="font-size: 0.8em;">x = L</div>
+                    <div style="margin-top: 10px;">接收</div>
+                    <div class="wave-arrow plus-k">→</div>
+                    <div style="font-size: 0.8em;">+k 方向波</div>
+                </div>
+            </div>
+            
+            <div class="explanation-highlight">
+                <h3><span class="correct-mark">✓</span> 您的理解</h3>
+                <div class="wave-direction">
+                    <strong>右邊界：</strong>接收 +k 方向波，要傳到下一週期
+                    <div class="phase-factor">× e^(+jkL)</div>
+                    給左邊界
+                </div>
+                <div class="wave-direction">
+                    <strong>左邊界：</strong>接收 -k 方向波，要傳到下一週期
+                    <div class="phase-factor">× e^(-jkL)</div>
+                    給右邊界
+                </div>
+            </div>
+        </div>
+        
+        <div class="scenario-box">
+            <h2>🔍 程式碼對應關係</h2>
+            
+            <div class="formula-box">
+                <div><strong>程式碼實現：</strong></div>
+                <div style="margin: 15px 0;">
+                    <code style="background: rgba(0,0,0,0.2); padding: 5px; border-radius: 5px;">
+                        phase = e^(-jkL)
+                    </code>
+                </div>
+                <div>
+                    <strong>左邊界：</strong> E[0] = E[-2] × phase = E[-2] × e^(-jkL)<br>
+                    <strong>右邊界：</strong> E[-1] = E[1] × conj(phase) = E[1] × e^(+jkL)
+                </div>
+            </div>
+            
+            <div class="explanation-highlight">
+                <h3>🎯 物理對應</h3>
+                <ul style="text-align: left; margin: 15px 0;">
+                    <li><strong>+k 方向波</strong>：從左往右傳播，在右邊界被"收集"</li>
+                    <li><strong>-k 方向波</strong>：從右往左傳播，在左邊界被"收集"</li>
+                    <li><strong>相位因子</strong>：確保波在跨越週期邊界時有正確的相位關係</li>
+                    <li><strong>週期性條件</strong>：ψ(x+L) = ψ(x) × e^(jkL) 在兩個方向都滿足</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="scenario-box">
+            <h2>🌊 完整的物理圖像</h2>
+            <div class="explanation-highlight">
+                <h3>為什麼您的理解是對的？</h3>
+                <div style="text-align: left;">
+                    <p><strong>1. 方向性正確：</strong></p>
+                    <ul>
+                        <li>右邊界確實接收 +k 方向（左→右）的波</li>
+                        <li>左邊界確實接收 -k 方向（右→左）的波</li>
+                    </ul>
+                    
+                    <p><strong>2. 相位修正正確：</strong></p>
+                    <ul>
+                        <li>+k 波跨越 L 距離：相位增加 +kL</li>
+                        <li>-k 波跨越 L 距離：相位增加 -kL</li>
+                    </ul>
+                    
+                    <p><strong>3. 週期性完整：</strong></p>
+                    <ul>
+                        <li>兩個邊界共同維持 Bloch 定理</li>
+                        <li>模擬無限週期結構的效果</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
