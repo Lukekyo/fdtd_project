@@ -512,8 +512,7 @@ class ComplexPlaneWave:
         name: str = None,
         pulse: bool = False,
         cycle: int = 5,
-        hanning_dt: float = None,
-        medium_n: float = None
+        medium_n: float = None,
     ):
         """
         創建ComplexPlaneWave，自動從wavelength計算所有頻率參數
@@ -666,7 +665,7 @@ class ComplexPlaneWave:
                 
         # 載波相位
         time_phase = self.omega_sim * q + self.phase_shift
-        
+
         if self.pulse:
             pulse_duration = int(self.cycle * self.period_sim)
             
@@ -677,8 +676,7 @@ class ComplexPlaneWave:
                 envelope = 0
         else:
             envelope = 1
-
-        # print(f"monitoring_enabled: {self.monitoring_enabled}")
+        
         # 更新每個格點的電場
         for xi, zi in zip(self.x, self.z):
             spatial_phase = self.spatial_phase[(xi, zi)]
@@ -694,11 +692,12 @@ class ComplexPlaneWave:
 
     def update_H(self):
         pass
-    
+
     def get_source_power(self, grid_spacing):
         """功率計算"""
         Z_medium = bd.eta0 / self.n
         E0 = abs(self.amplitude)
+        print(f"eta0 = {bd.eta0:.2f} Ω, n = {self.n}, Z_medium = {Z_medium:.2f} Ω")
         
         source_length = len(getattr(self, 'x', [1])) * grid_spacing
         power_density = 0.5 * E0**2 / Z_medium
@@ -725,7 +724,6 @@ class ComplexPlaneWave:
         
         # 記錄當前狀態
         self.monitor_data['timesteps'].append(q)
-        print(f"q = {q}")
         self.monitor_data['E_field'].append(field_value)
         self.monitor_data['envelope'].append(envelope)
         # 記錄載波相位

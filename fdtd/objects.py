@@ -56,8 +56,8 @@ class Object:
         elif n is not None and k is not None:
             self.n = n
             self.k = k
-            epsilon_complex = (n + 1j * k) ** 2  # ε = (n + ik)^2 = n^2 - k^2 + 2ink
-            self.permittivity = bd.array(epsilon_complex)
+            relative_eps = (n + 1j * k) ** 2  # ε = (n + ik)^2 = n^2 - k^2 + 2ink
+            self.permittivity = bd.array(relative_eps)
         else:
             raise ValueError("You must provide either 'permittivity' or both 'n' and 'k'.")
 

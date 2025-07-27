@@ -267,10 +267,10 @@ class BlochBoundary(Boundary):
 # Bloch Boundaries in the X-direction
 class _BlochBoundaryX(BlochBoundary):
     def update_E(self):
-        # 左邊界網格 = 右邊物理最後一個網格 × phase
-        self.grid.E[0, :, :, :] = self.grid.E[-2, :, :, :] * self.phase # E(x=0) = E(x=L-Δx) × e^(jkL)
-        # 右邊界網格 = 左邊物理第一個網格 × conj(phase) 
-        self.grid.E[-1, :, :, :] = self.grid.E[1, :, :, :] * bd.conj(self.phase) #E(x=L) = E(x=Δx) × e^(-jkL)
+        # 左邊界：接收 -k 方向波，要傳到下一週期× e^(-jkL)給右邊界；-k 波跨越 L 距離：相位增加 -kL
+        self.grid.E[0, :, :, :] = self.grid.E[-2, :, :, :] * self.phase # phase = bd.exp(1j * -k_component * length)
+        # 右邊界：接收 +k 方向波，要傳到下一週期× e^(+jkL)給左邊界；+k 波跨越 L 距離：相位增加 +kL
+        self.grid.E[-1, :, :, :] = self.grid.E[1, :, :, :] * bd.conj(self.phase) # conj(phase) = bd.exp(1j * +k_component * length)
 
     def update_H(self):
         self.grid.H[0, :, :, :] = self.grid.H[-2, :, :, :] * self.phase

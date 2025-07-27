@@ -39,17 +39,14 @@ def curl_E(E: Tensorlike) -> Tensorlike:
     """
     curl = bd.zeros(E.shape,dtype=E.dtype)
 
-    # curlx = dEz/dy - dEy/dz
-    curl[:, :-1, :, 0] += E[:, 1:, :, 2] - E[:, :-1, :, 2] #dEz/dy
-    curl[:, :, :-1, 0] -= E[:, :, 1:, 1] - E[:, :, :-1, 1] #dEy/dz
+    curl[:, :-1, :, 0] += E[:, 1:, :, 2] - E[:, :-1, :, 2]
+    curl[:, :, :-1, 0] -= E[:, :, 1:, 1] - E[:, :, :-1, 1]
 
-    # curly = dEx/dz - dEz/dx
-    curl[:, :, :-1, 1] += E[:, :, 1:, 0] - E[:, :, :-1, 0] #dEx/dz
-    curl[:-1, :, :, 1] -= E[1:, :, :, 2] - E[:-1, :, :, 2] #dEz/dx
+    curl[:, :, :-1, 1] += E[:, :, 1:, 0] - E[:, :, :-1, 0]
+    curl[:-1, :, :, 1] -= E[1:, :, :, 2] - E[:-1, :, :, 2]
 
-    # curlz = dEy/dx - dEx/dy
-    curl[:-1, :, :, 2] += E[1:, :, :, 1] - E[:-1, :, :, 1] #dEy/dx
-    curl[:, :-1, :, 2] -= E[:, 1:, :, 0] - E[:, :-1, :, 0] #dEx/dy
+    curl[:-1, :, :, 2] += E[1:, :, :, 1] - E[:-1, :, :, 1]
+    curl[:, :-1, :, 2] -= E[:, 1:, :, 0] - E[:, :-1, :, 0]
 
     return curl
 
@@ -67,7 +64,6 @@ def curl_H(H: Tensorlike) -> Tensorlike:
     """
     curl = bd.zeros(H.shape,dtype=H.dtype)
 
-    # curlx = dHz/dy - dHy/dz
     curl[:, 1:, :, 0] += H[:, 1:, :, 2] - H[:, :-1, :, 2]
     curl[:, :, 1:, 0] -= H[:, :, 1:, 1] - H[:, :, :-1, 1]
 
@@ -78,7 +74,6 @@ def curl_H(H: Tensorlike) -> Tensorlike:
     curl[:, 1:, :, 2] -= H[:, 1:, :, 0] - H[:, :-1, :, 0]
 
     return curl
-
 
 ## FDTD Grid Class
 class Grid:
@@ -98,7 +93,6 @@ class Grid:
         permittivity: float = 1.0,
         permeability: float = 1.0,
         courant_number: float = None,
-        force_complex: bool = True,
     ):
         """
         Args:
@@ -113,7 +107,6 @@ class Grid:
         """
         # save the grid spacing
         self.grid_spacing = float(grid_spacing)
-        self.force_complex = force_complex
 
         # save grid shape as integers
         self.Nx, self.Ny, self.Nz = self._handle_tuple(shape)
@@ -137,13 +130,9 @@ class Grid:
         # timestep of the simulation
         self.time_step = self.courant_number * self.grid_spacing / const.c
 
-        # Choose dtype based on force_complex
-        field_dtype = bd.complex if force_complex else bd.float
-        material_dtype = bd.complex if force_complex else bd.float
-
         # save electric and magnetic field
-        self.E = bd.zeros((self.Nx, self.Ny, self.Nz, 3), dtype=field_dtype)
-        self.H = bd.zeros((self.Nx, self.Ny, self.Nz, 3), dtype=field_dtype)
+        self.E = bd.zeros((self.Nx, self.Ny, self.Nz, 3))
+        self.H = bd.zeros((self.Nx, self.Ny, self.Nz, 3))
 
         # save the inverse of the relative permittiviy and the relative permeability
         # these tensors can be anisotropic!
@@ -151,13 +140,13 @@ class Grid:
         if bd.is_array(permittivity) and len(permittivity.shape) == 3:
             permittivity = permittivity[:, :, :, None]
         self.inverse_permittivity = bd.ones((self.Nx, self.Ny, self.Nz, 3)) / bd.array(
-            permittivity, dtype=material_dtype
+            permittivity, dtype=bd.float
         )
 
         if bd.is_array(permeability) and len(permeability.shape) == 3:
             permeability = permeability[:, :, :, None]
         self.inverse_permeability = bd.ones((self.Nx, self.Ny, self.Nz, 3)) / bd.array(
-            permeability, dtype=material_dtype
+            permeability, dtype=bd.float
         )
 
         # save current time index
@@ -288,18 +277,13 @@ class Grid:
         # update boundaries: step 1
         for boundary in self.boundaries:
             boundary.update_phi_E()
-        
+
         curl = curl_H(self.H)
-        # Ensure dtype consistency for field updates
-        if self.force_complex:
-            courant_complex = bd.array(self.courant_number, dtype=bd.complex)
-            self.E += courant_complex * self.inverse_permittivity * curl
-        else:
-            self.E += self.courant_number * self.inverse_permittivity * curl
-    
+        self.E += self.courant_number * self.inverse_permittivity * curl
+
         # update objects
         for obj in self.objects:
-            obj.update_E(curl)  # 處理σₑE項
+            obj.update_E(curl)
 
         # update boundaries: step 2
         for boundary in self.boundaries:
@@ -307,7 +291,7 @@ class Grid:
 
         # add sources to grid:
         for src in self.sources:
-            src.update_E()      # 處理Ji項
+            src.update_E()
 
         # detect electric field
         for det in self.detectors:
@@ -321,12 +305,7 @@ class Grid:
             boundary.update_phi_H()
 
         curl = curl_E(self.E)
-        
-        if self.force_complex:
-            courant_complex = bd.array(self.courant_number, dtype=bd.complex)
-            self.H -= courant_complex * self.inverse_permeability * curl
-        else:
-            self.H -= self.courant_number * self.inverse_permeability * curl
+        self.H -= self.courant_number * self.inverse_permeability * curl
 
         # update objects
         for obj in self.objects:
@@ -343,7 +322,7 @@ class Grid:
         # detect electric field
         for det in self.detectors:
             det.detect_H()
-
+        
     def reset(self):
         """reset the grid by setting all fields to zero"""
         self.H *= 0.0
@@ -371,79 +350,9 @@ class Grid:
         self.objects[name] = obj
     
     def promote_dtypes_to_complex(self):
-        """Ensure all relevant arrays are converted to complex dtype."""
-        self.E = bd.array(self.E, dtype=bd.complex)
-        self.H = bd.array(self.H, dtype=bd.complex)
-        self.inverse_permittivity = bd.array(self.inverse_permittivity, dtype=bd.complex)
-        self.inverse_permeability = bd.array(self.inverse_permeability, dtype=bd.complex)
-
-        # for boundary in self.boundaries:
-        #     if hasattr(boundary, "promote_dtypes_to_complex"):
-        #         boundary.promote_dtypes_to_complex()
-        
-        for boundary in self.boundaries:
-            try:
-                boundary.promote_dtypes_to_complex()
-            except AttributeError:
-                pass
-        
-        # Update the flag
-        self.force_complex = True
-
-    def check_field_consistency(self):
-        """Check field dtype consistency - diagnostic function"""
-        print("=== Field dtype consistency check ===")
-        print(f"E field dtype: {self.E.dtype}")
-        print(f"H field dtype: {self.H.dtype}")
-        print(f"inverse_permittivity dtype: {self.inverse_permittivity.dtype}")
-        print(f"inverse_permeability dtype: {self.inverse_permeability.dtype}")
-        print(f"courant_number type: {type(self.courant_number)}")
-        print(f"force_complex: {self.force_complex}")
-        
-        if self.force_complex:
-            types_ok = (
-                self.E.dtype == bd.complex and
-                self.H.dtype == bd.complex and
-                self.inverse_permittivity.dtype == bd.complex and
-                self.inverse_permeability.dtype == bd.complex
-            )
-            print(f"All complex types consistent: {types_ok}")
-            return types_ok
-        else:
-            print("Force complex disabled, mixed types allowed")
-            return True
-
-    def diagnose_numerical_issues(self):
-        """Diagnose numerical stability issues"""
-        print("=== Numerical stability diagnosis ===")
-        
-        # Check field value ranges
-        E_max = bd.max(bd.abs(self.E))
-        H_max = bd.max(bd.abs(self.H))
-        print(f"Max |E|: {E_max}")
-        print(f"Max |H|: {H_max}")
-        
-        # Check for NaN or infinite values
-        E_has_nan = bd.any(bd.isnan(bd.real(self.E))) or bd.any(bd.isnan(bd.imag(self.E)))
-        H_has_nan = bd.any(bd.isnan(bd.real(self.H))) or bd.any(bd.isnan(bd.imag(self.H)))
-        E_has_inf = bd.any(bd.isinf(bd.real(self.E))) or bd.any(bd.isinf(bd.imag(self.E)))
-        H_has_inf = bd.any(bd.isinf(bd.real(self.H))) or bd.any(bd.isinf(bd.imag(self.H)))
-        
-        print(f"E has NaN: {E_has_nan}")
-        print(f"H has NaN: {H_has_nan}")
-        print(f"E has Inf: {E_has_inf}")
-        print(f"H has Inf: {H_has_inf}")
-        
-        # Check Courant condition
-        max_courant = float(self.D) ** (-0.5)
-        print(f"Courant number: {self.courant_number:.6f}")
-        print(f"Max allowed Courant: {max_courant:.6f}")
-        print(f"Courant condition OK: {self.courant_number <= max_courant}")
-        
-        numerical_ok = not (E_has_nan or H_has_nan or E_has_inf or H_has_inf)
-        print(f"Numerical stability OK: {numerical_ok}")
-        
-        return numerical_ok
+        self.E = self.E.astype(bd.complex)
+        self.H = self.H.astype(bd.complex)
+        [boundary.promote_dtypes_to_complex() for boundary in self.boundaries]
 
     def __setitem__(self, key, attr):
         if not isinstance(key, tuple):

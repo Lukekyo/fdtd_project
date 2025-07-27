@@ -175,9 +175,9 @@ class LineDetector:
         # 取最後幾步的Poynting向量進行平均
         steady_data = self.S[-steady_steps:]
         
-        print(f"   檢測器 '{self.name}' 功率流分析:")
-        print(f"   分析步數: {steady_steps}")
-        print(f"   原始數據: {[f'{x:.2e}' for x in steady_data[-steady_steps:]]}")  # 顯示最後5個值
+        # print(f"   檢測器 '{self.name}' 功率流分析:")
+        # print(f"   分析步數: {steady_steps}")
+        # print(f"   原始數據: {[f'{x:.2e}' for x in steady_data[-steady_steps:]]}")  # 顯示最後5個值
 
         if self.flip_sign:
             # 反射檢測器：由於已經在detect_S中處理符號，這裡取絕對值
@@ -185,7 +185,7 @@ class LineDetector:
         else:
             # 穿透檢測器：取實部
             power_flow = bd.mean(bd.real(steady_data))
-        print(f"   平均功率流: {power_flow:.6e} W/m")
+        # print(f"   平均功率流: {power_flow:.6e} W/m")
         return power_flow
 
     def detector_values(self):

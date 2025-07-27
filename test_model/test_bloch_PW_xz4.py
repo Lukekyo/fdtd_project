@@ -14,7 +14,7 @@ fdtd.set_backend("numpy")
 wavelength = fdtd.nm(1550)
 grid_spacing = fdtd.nm(20)
 x_span, z_span = fdtd.um(2), fdtd.um(6)
-total_steps = 1000
+total_steps = 500
 structure_enabled = True  # 是否添加結構
 Nx = fdtd.to_grid(x_span, grid_spacing)
 Nz = fdtd.to_grid(z_span, grid_spacing)
@@ -25,7 +25,7 @@ kx = k0 * np.sin(theta)
 Lx = Nx * grid_spacing
 
 pml_thickness = 10
-source_z = pml_thickness + 5
+source_z = pml_thickness + 20
 det_z_R = fdtd.to_grid(fdtd.um(1.5), grid_spacing)
 start_z = fdtd.to_grid(fdtd.um(2), grid_spacing)
 end_z = fdtd.to_grid(fdtd.um(3), grid_spacing)
@@ -42,8 +42,7 @@ def make_grid(with_structure=structure_enabled):
     grid = fdtd.Grid(
         shape=(Nx, 1, Nz),
         grid_spacing=grid_spacing,
-        permittivity=1.0,
-        force_complex=True
+        permittivity=1.0
     )
 
     # 邊界條件
@@ -60,7 +59,6 @@ def make_grid(with_structure=structure_enabled):
         pulse=True,  # ===== 👇 改用連續波以便觀察週期 =====
         name="source"
     )
-
     # 探測器設定
     grid[:, 0, det_z_T] = fdtd.LineDetector(name="T", flip_sign=False)
     grid[:, 0, det_z_R] = fdtd.LineDetector(name="R", flip_sign=True)
@@ -90,8 +88,8 @@ def run_simulation(with_structure=True, total_steps=500, animation_interval=10):
     for t in range(total_steps):
         grid.step()
         # 每100步顯示進度，避免被清除
-        if t % 100 == 0:
-            print(f"進度: {t}/{total_steps}", flush=True)
+        # if t % 10 == 0:
+        #     print(f"進度: {t}/{total_steps}", flush=True)
         # 動畫顯示 - 使用 Floport 可視化
         if USE_ANIMATION and simfolder and t % animation_interval == 0:
             try:
@@ -107,7 +105,7 @@ def run_simulation(with_structure=True, total_steps=500, animation_interval=10):
                 ax.set_xlabel("x (um)")
                 ax.set_ylabel("z (um)")
                 plt.tight_layout()
-                # clear_output(wait=True)
+                clear_output(wait=True)
             except Exception as e:
                 print(f"可視化錯誤: {e}")
         else:
@@ -184,11 +182,13 @@ if __name__ == "__main__":
         results, grid, simulation_time = run_simulation(
             with_structure=structure_enabled, 
             total_steps=total_steps,
-            animation_interval=100  # 每n步顯示一次
+            animation_interval=10  # 每n步顯示一次
         )
         # 快速場檢查
         grid.source.analyze_source_output()
         grid.source.plot_source_analysis()
+        grid.source.get_source_power(grid_spacing)
+        field_visualization(grid)
         
     except Exception as e:
         print(f"\n💥 程式執行錯誤: {e}")

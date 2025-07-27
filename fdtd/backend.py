@@ -74,7 +74,7 @@ class Backend:
     c0 = 299_792_458  # 光速 (m/s)
     mu0 = 4e-7 * pi  # 真空磁導率 (H/m)
     eps0 = 1.0 / (mu0 * c0**2)  # 真空介電常數 (F/m)
-    eta0 = (mu0 * eps0) ** 0.5  # 真空阻抗 (Ω)
+    eta0 = (mu0 / eps0) ** 0.5  # 真空阻抗 (Ω)
 
     def __repr__(self):
         return self.__class__.__name__
@@ -120,6 +120,9 @@ class NumpyBackend(Backend):
     """ sine of all elements in array """
 
     cos = staticmethod(numpy.cos)
+    """ cosine of all elements in array """
+
+    tanh = staticmethod(numpy.tanh)
     """ cosine of all elements in array """
 
     sum = staticmethod(numpy.sum)
@@ -291,6 +294,9 @@ if TORCH_AVAILABLE:
         """ sine of all elements in array """
 
         cos = staticmethod(torch.cos)
+        """ cosine of all elements in array """
+
+        tanh = staticmethod(torch.tanh)
         """ cosine of all elements in array """
 
         sum = staticmethod(torch.sum)
