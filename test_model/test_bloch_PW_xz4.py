@@ -171,6 +171,7 @@ def field_visualization(grid):
     plt.tight_layout()
     plt.show()
 
+
 # ==== 主程式執行 ====
 if __name__ == "__main__":
     try:
@@ -191,8 +192,11 @@ if __name__ == "__main__":
         field_visualization(grid)
         P_T = grid.T.get_power_flow_postprocess(steady_steps=50)
         P_R = grid.R.get_power_flow_postprocess(steady_steps=50)
+        # debug_detector_data_structure(grid.T)
+        # debug_detector_data_structure(grid.R)
         
     except Exception as e:
         print(f"\n💥 程式執行錯誤: {e}")
         import traceback
         traceback.print_exc()
+    

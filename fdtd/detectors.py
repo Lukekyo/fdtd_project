@@ -211,10 +211,11 @@ class LineDetector:
     def _calculate_power_from_nested_lists(self, E_nested, H_nested):
         """
         從原版的嵌套列表格式計算功率流
+        數據結構：E_nested 是 numpy.ndarray，形狀為 (n_points, 3)
         
         Args:
-            E_nested: detect_E產生的嵌套列表
-            H_nested: detect_H產生的嵌套列表
+            E_nested: detect_E產生的數據，形狀 (n_points, 3)
+            H_nested: detect_H產生的數據，形狀 (n_points, 3)
             
         Returns:
             float: 該時間步的功率流
@@ -222,33 +223,40 @@ class LineDetector:
         total_power = 0.0
         
         try:
-            # 遍歷嵌套列表：E[i][j][k] 是場向量
-            for i in range(len(E_nested)):
-                for j in range(len(E_nested[i])):
-                    for k in range(len(E_nested[i][j])):
-                        E_vec = E_nested[i][j][k]  # (3,) 向量
-                        H_vec = H_nested[i][j][k]  # (3,) 向量
-                        
-                        # 確保是3分量向量
-                        if hasattr(E_vec, '__len__') and len(E_vec) >= 3:
-                            # 計算坡印廷向量的傳播方向分量
-                            if self.direction_idx == 2:  # z方向傳播
-                                S_z = bd.real(E_vec[0] * bd.conj(H_vec[1]) - E_vec[1] * bd.conj(H_vec[0]))
-                            elif self.direction_idx == 0:  # x方向傳播
-                                S_z = bd.real(E_vec[1] * bd.conj(H_vec[2]) - E_vec[2] * bd.conj(H_vec[1]))
-                            elif self.direction_idx == 1:  # y方向傳播
-                                S_z = bd.real(E_vec[2] * bd.conj(H_vec[0]) - E_vec[0] * bd.conj(H_vec[2]))
-                            
-                            # 根據檢測器類型累加功率
-                            if self.flip_sign:  # 反射檢測器
-                                if S_z < 0:
-                                    total_power += -S_z
-                            else:  # 穿透檢測器
-                                if S_z > 0:
-                                    total_power += S_z
+            # E_nested 是 (n_points, 3) 的陣列
+            # 每一行是一個空間點的場向量 [Ex, Ey, Ez]
+            n_points = len(E_nested)
+            
+            for i in range(n_points):
+                # 獲取第i個點的場向量
+                E_vec = E_nested[i]  # 形狀 (3,)
+                H_vec = H_nested[i]  # 形狀 (3,)
+                
+                # 計算坡印廷向量的傳播方向分量
+                # S = E × H，我們只需要特定方向的分量
+                if self.direction_idx == 2:  # z方向傳播
+                    S_z = bd.real(E_vec[0] * bd.conj(H_vec[1]) - E_vec[1] * bd.conj(H_vec[0]))
+                elif self.direction_idx == 0:  # x方向傳播
+                    S_z = bd.real(E_vec[1] * bd.conj(H_vec[2]) - E_vec[2] * bd.conj(H_vec[1]))
+                elif self.direction_idx == 1:  # y方向傳播
+                    S_z = bd.real(E_vec[2] * bd.conj(H_vec[0]) - E_vec[0] * bd.conj(H_vec[2]))
+                else:
+                    S_z = 0  # 未知方向
+                
+                # 根據檢測器類型累加功率
+                if self.flip_sign:  # 反射檢測器
+                    if S_z < 0:
+                        total_power += -S_z
+                else:  # 穿透檢測器
+                    if S_z > 0:
+                        total_power += S_z
         
         except Exception as e:
             print(f"   計算功率流錯誤: {e}")
+            print(f"   E_nested shape: {E_nested.shape if hasattr(E_nested, 'shape') else 'no shape'}")
+            print(f"   H_nested shape: {H_nested.shape if hasattr(H_nested, 'shape') else 'no shape'}")
+            import traceback
+            traceback.print_exc()
             return 0.0
         
         return float(total_power)
