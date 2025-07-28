@@ -189,6 +189,8 @@ if __name__ == "__main__":
         grid.source.plot_source_analysis()
         grid.source.get_source_power(grid_spacing)
         field_visualization(grid)
+        P_T = grid.T.get_power_flow_postprocess(steady_steps=50)
+        P_R = grid.R.get_power_flow_postprocess(steady_steps=50)
         
     except Exception as e:
         print(f"\n💥 程式執行錯誤: {e}")
