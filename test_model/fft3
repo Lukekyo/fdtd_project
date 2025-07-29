@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>FFT公式原理詳解</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .section { background: white; margin: 20px 0; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .chart-container { width: 100%; height: 300px; margin: 20px 0; }
+        .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .highlight { background: #e3f2fd; padding: 15px; border-left: 4px solid #2196f3; margin: 10px 0; }
+        .formula { background: #f8f9fa; padding: 15px; border-radius: 8px; font-family: 'Courier New', monospace; margin: 15px 0; border: 1px solid #e0e0e0; }
+        .big-formula { background: #e8f5e8; padding: 20px; border-radius: 10px; text-align: center; font-size: 18px; margin: 20px 0; border: 2px solid #4caf50; }
+        .step { background: #fff3e0; padding: 15px; margin: 10px 0; border-radius: 8px; border-left: 4px solid #ff9800; }
+        h2 { color: #1976d2; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; }
+        h3 { color: #424242; }
+        .complex-plane { display: inline-block; margin: 10px; }
+        .interactive { background: #f3e5f5; padding: 15px; border-radius: 8px; margin: 15px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔢 FFT公式原理：從時域到頻域的魔法</h1>
+
+```
+    <!-- 核心公式 -->
+    <div class="section">
+        <h2>1. 核心公式：離散傅立葉變換 (DFT)</h2>
+        
+        <div class="big-formula">
+            <strong>X(k) = Σ<sub>n=0</sub><sup>N-1</sup> x(n) × e<sup>-j2πkn/N</sup></strong>
+        </div>
+        
+        <div class="highlight">
+            <strong>公式解讀</strong>：
+            <ul>
+                <li><strong>x(n)</strong>：時域信號的第n個採樣點</li>
+                <li><strong>X(k)</strong>：頻域的第k個頻率成分</li>
+                <li><strong>N</strong>：總採樣點數</li>
+                <li><strong>k</strong>：頻率索引 (0, 1, 2, ..., N-1)</li>
+                <li><strong>n</strong>：時間索引 (0, 1, 2, ..., N-1)</li>
+                <li><strong>e<sup>-j2πkn/N</sup></strong>：複數指數（這是關鍵！）</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 複數指數的秘密 -->
+    <div class="section">
+        <h2>2. 複數指數的秘密：e<sup>-j2πkn/N</sup></h2>
+        
+        <div class="formula">
+            e<sup>-j2πkn/N</sup> = cos(2πkn/N) - j×sin(2πkn/N)
+        </div>
+        
+        <div class="comparison">
+            <div>
+                <h3>📊 複數平面視角</h3>
+                <div class="chart-container">
+                    <canvas id="complexPlaneChart"></canvas>
+                </div>
+            </div>
+            
+            <div>
+                <h3>🌊 旋轉向量視角</h3>
+                <div class="chart-container">
+                    <canvas id="rotatingVectorChart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <div class="highlight">
+            <strong>🔑 關鍵理解</strong>：<br>
+            e<sup>-j2πkn/N</sup> 是一個在複數平面上以頻率k旋轉的單位向量！<br>
+            不同的k值 = 不同的旋轉頻率 = 不同的頻率成分測試器
+        </div>
+    </div>
+
+    <!-- 工作原理 -->
+    <div class="section">
+        <h2>3. FFT如何工作：頻率檢測器</h2>
+        
+        <div class="step">
+            <strong>步驟1：為每個頻率k創建一個"檢測器"</strong><br>
+            檢測器 = e<sup>-j2πkn/N</sup>（以頻率k旋轉的複數向量）
+        </div>
+        
+        <div class="step">
+            <strong>步驟2：用檢測器"掃描"整個時域信號</strong><br>
+            將信號x(n)與檢測器相乘，然後加總：Σ x(n) × e<sup>-j2πkn/N</sup>
+        </div>
+        
+        <div class="step">
+            <strong>步驟3：如果信號包含頻率k，會發生"共振"</strong><br>
+            相同頻率 → 向量同方向 → 加總結果很大<br>
+            不同頻率 → 向量各方向 → 加總結果接近零
+        </div>
+        
+        <div class="chart-container">
+            <canvas id="detectionChart"></canvas>
+        </div>
+    </div>
+
+    <!-- 具體例子 -->
+    <div class="section">
+        <h2>4. 具體例子：檢測5Hz信號</h2>
+        
+        <div class="interactive">
+            <strong>假設</strong>：我們有8個採樣點的信號，想檢測是否包含頻率k=1的成分
+        </div>
+        
+        <div class="formula">
+            <strong>時域信號</strong>：x = [1, 0, -1, 0, 1, 0, -1, 0]　(正弦波)<br>
+            <strong>檢測頻率</strong>：k = 1<br>
+            <strong>計算</strong>：X(1) = Σ<sub>n=0</sub><sup>7</sup> x(n) × e<sup>-j2π×1×n/8</sup>
+        </div>
+        
+        <div class="comparison">
+            <div>
+                <h3>📈 時域信號</h3>
+                <div class="chart-container">
+                    <canvas id="exampleTimeChart"></canvas>
+                </div>
+            </div>
+            
+            <div>
+                <h3>🎯 檢測過程</h3>
+                <div class="chart-container">
+                    <canvas id="detectionProcessChart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <div id="calculationResult" class="highlight">
+            <!-- 計算結果會動態插入這裡 -->
+        </div>
+    </div>
+
+    <!-- 為什麼FFT更快 -->
+    <div class="section">
+        <h2>5. 為什麼FFT比DFT快？分治法的智慧</h2>
+        
+        <div class="step">
+            <strong>DFT的問題</strong>：對每個頻率k，都要計算N次乘法<br>
+            總共需要：N個頻率 × N次乘法 = N²次運算
+        </div>
+        
+        <div class="step">
+            <strong>FFT的智慧</strong>：發現計算中有很多重複！<br>
+            例如：e<sup>-j2π×4×n/8</sup> = (e<sup>-j2π×2×n/8</sup>)²
+        </div>
+        
+        <div class="chart-container">
+            <canvas id="fftTreeChart"></canvas>
+        </div>
+        
+        <div class="highlight">
+            <strong>🚀 FFT演算法</strong>：
+            <ol>
+                <li><strong>分割</strong>：將N點DFT分解為兩個N/2點DFT</li>
+                <li><strong>遞迴</strong>：繼續分割直到變成1點DFT</li>
+                <li><strong>合併</strong>：利用對稱性快速合併結果</li>
+                <li><strong>結果</strong>：O(N²) → O(N log N)</li>
+            </ol>
+        </div>
+    </div>
+
+    <!-- 實際計算示例 -->
+    <div class="section">
+        <h2>6. 手算一個4點FFT</h2>
+        
+        <div class="formula">
+            <strong>輸入</strong>：x = [1, 2, 3, 4]<br>
+            <strong>目標</strong>：計算X(0), X(1), X(2), X(3)
+        </div>
+        
+        <div class="step">
+            <strong>X(0)</strong> = 1×e<sup>0</sup> + 2×e<sup>0</sup> + 3×e<sup>0</sup> + 4×e<sup>0</sup> = 1+2+3+4 = <span style="color: red;">10</span>
+        </div>
+        
+        <div class="step">
+            <strong>X(1)</strong> = 1×e<sup>0</sup> + 2×e<sup>-jπ/2</sup> + 3×e<sup>-jπ</sup> + 4×e<sup>-j3π/2</sup><br>
+            = 1×1 + 2×(-j) + 3×(-1) + 4×(j) = 1-2j-3+4j = <span style="color: red;">-2+2j</span>
+        </div>
+        
+        <div class="step">
+            <strong>X(2)</strong> = 1×1 + 2×(-1) + 3×1 + 4×(-1) = 1-2+3-4 = <span style="color: red;">-2</span>
+        </div>
+        
+        <div class="step">
+            <strong>X(3)</strong> = 1×1 + 2×j + 3×(-1) + 4×(-j) = 1+2j-3-4j = <span style="color: red;">-2-2j</span>
+        </div>
+        
+        <div class="highlight">
+            <strong>結果解讀</strong>：
+            <ul>
+                <li><strong>X(0) = 10</strong>：直流成分（平均值×N）</li>
+                <li><strong>|X(1)| = √8</strong>：頻率1的振幅</li>
+                <li><strong>|X(2)| = 2</strong>：頻率2的振幅</li>
+                <li><strong>|X(3)| = √8</strong>：頻率3的振幅</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 物理意義 -->
+    <div class="section">
+        <h2>7. 物理意義：為什麼這個公式能分離頻率？</h2>
+        
+        <div class="highlight">
+            <strong>🎯 核心概念：正交性</strong><br>
+            不同頻率的複數指數函數彼此"正交"（互相垂直）
+        </div>
+        
+        <div class="formula">
+            <strong>正交性</strong>：Σ<sub>n=0</sub><sup>N-1</sup> e<sup>j2πk₁n/N</sup> × e<sup>-j2πk₂n/N</sup> = 
+            <br>　　　　　　{ N, if k₁ = k₂
+            <br>　　　　　　{ 0, if k₁ ≠ k₂
+        </div>
+        
+        <div class="step">
+            <strong>這意味著</strong>：當我們用頻率k₁的檢測器去檢測信號時：
+            <ul>
+                <li>如果信號包含頻率k₁ → 檢測器與信號"同步" → 結果很大</li>
+                <li>如果信號包含其他頻率 → 檢測器與信號"不同步" → 結果為零</li>
+            </ul>
+        </div>
+        
+        <div class="chart-container">
+            <canvas id="orthogonalityChart"></canvas>
+        </div>
+    </div>
+
+    <!-- 總結 -->
+    <div class="section">
+        <h2>8. 總結：FFT的本質</h2>
+        
+        <div class="highlight">
+            <strong>🎯 FFT做了什麼</strong>：
+            <ol>
+                <li><strong>創造檢測器</strong>：為每個頻率k創建一個旋轉檢測器 e<sup>-j2πkn/N</sup></li>
+                <li><strong>逐一檢測</strong>：用每個檢測器掃描整個時域信號</li>
+                <li><strong>共振放大</strong>：相同頻率產生共振，不同頻率相互抵消</li>
+                <li><strong>輸出結果</strong>：每個頻率的"共振強度" = 該頻率的振幅</li>
+            </ol>
+        </div>
+        
+        <div class="step">
+            <strong>🚀 為什麼FFT快</strong>：<br>
+            聰明地重複利用中間計算結果，避免重複計算相同的複數指數
+        </div>
+        
+        <div class="formula">
+            <strong>記住這個公式</strong>：<br>
+            X(k) = Σ x(n) × e<sup>-j2πkn/N</sup><br>
+            <em>"時域信號與頻率檢測器的內積"</em>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 複數平面圖
+    const complexCtx = document.getElementById('complexPlaneChart').getContext('2d');
+    const angles = [];
+    const realParts = [];
+    const imagParts = [];
+    
+    for (let i = 0; i < 8; i++) {
+        const angle = -2 * Math.PI * i / 8;
+        angles.push(`n=${i}`);
+        realParts.push(Math.cos(angle));
+        imagParts.push(Math.sin(angle));
+    }
+
+    new Chart(complexCtx, {
+        type: 'scatter',
+        data: {
+            datasets: [{
+                label: 'e^(-j2πn/8)',
+                data: realParts.map((real, i) => ({x: real, y: imagParts[i]})),
+                borderColor: 'rgb(75, 192, 192)',
+                backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                pointRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { 
+                    title: { display: true, text: '實部 (cos)' },
+                    min: -1.5, max: 1.5
+                },
+                y: { 
+                    title: { display: true, text: '虛部 (sin)' },
+                    min: -1.5, max: 1.5
+                }
+            }
+        }
+    });
+
+    // 旋轉向量圖
+    const rotatingCtx = document.getElementById('rotatingVectorChart').getContext('2d');
+    const timePoints = [];
+    const k1_real = [];
+    const k2_real = [];
+    
+    for (let n = 0; n < 16; n++) {
+        timePoints.push(n);
+        k1_real.push(Math.cos(-2 * Math.PI * 1 * n / 8));
+        k2_real.push(Math.cos(-2 * Math.PI * 2 * n / 8));
+    }
+
+    new Chart(rotatingCtx, {
+        type: 'line',
+        data: {
+            labels: timePoints,
+            datasets: [{
+                label: 'k=1頻率檢測器',
+                data: k1_real,
+                borderColor: 'rgb(255, 99, 132)',
+                borderWidth: 2,
+                pointRadius: 4
+            }, {
+                label: 'k=2頻率檢測器',
+                data: k2_real,
+                borderColor: 'rgb(54, 162, 235)',
+                borderWidth: 2,
+                pointRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { title: { display: true, text: '時間點 n' }},
+                y: { title: { display: true, text: '檢測器實部' }}
+            }
+        }
+    });
+
+    // 檢測原理圖
+    const detectionCtx = document.getElementById('detectionChart').getContext('2d');
+    const signalData = [1, 0.7, 0, -0.7, -1, -0.7, 0, 0.7]; // 類似正弦波
+    const detector = signalData.map((_, i) => Math.cos(-2 * Math.PI * 1 * i / 8));
+    const product = signalData.map((s, i) => s * detector[i]);
+
+    new Chart(detectionCtx, {
+        type: 'line',
+        data: {
+            labels: [0,1,2,3,4,5,6,7],
+            datasets: [{
+                label: '原始信號 x(n)',
+                data: signalData,
+                borderColor: 'rgb(75, 192, 192)',
+                borderWidth: 3
+            }, {
+                label: '頻率檢測器 Re[e^(-j2πkn/N)]',
+                data: detector,
+                borderColor: 'rgb(255, 206, 86)',
+                borderWidth: 2,
+                borderDash: [5, 5]
+            }, {
+                label: '乘積 x(n)×detector',
+                data: product,
+                borderColor: 'rgb(255, 99, 132)',
+                borderWidth: 2,
+                backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { title: { display: true, text: '採樣點 n' }},
+                y: { title: { display: true, text: '振幅' }}
+            }
+        }
+    });
+
+    // 具體例子 - 時域
+    const exampleTimeCtx = document.getElementById('exampleTimeChart').getContext('2d');
+    const exampleSignal = [1, 0, -1, 0, 1, 0, -1, 0];
+
+    new Chart(exampleTimeCtx, {
+        type: 'line',
+        data: {
+            labels: [0,1,2,3,4,5,6,7],
+            datasets: [{
+                label: '時域信號 x(n)',
+                data: exampleSignal,
+                borderColor: 'rgb(75, 192, 192)',
+                borderWidth: 3,
+                pointRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { title: { display: true, text: '時間點 n' }},
+                y: { title: { display: true, text: '振幅' }}
+            }
+        }
+    });
+
+    // 檢測過程
+    const processCtx = document.getElementById('detectionProcessChart').getContext('2d');
+    const k1Detector = [1, 0.707, 0, -0.707, -1, -0.707, 0, 0.707];
+    const processProduct = exampleSignal.map((s, i) => s * k1Detector[i]);
+
+    new Chart(processCtx, {
+        type: 'bar',
+        data: {
+            labels: [0,1,2,3,4,5,6,7],
+            datasets: [{
+                label: 'x(n) × e^(-j2πn/8)',
+                data: processProduct,
+                backgroundColor: processProduct.map(v => v > 0 ? 'rgba(75, 192, 192, 0.6)' : 'rgba(255, 99, 132, 0.6)'),
+                borderColor: processProduct.map(v => v > 0 ? 'rgb(75, 192, 192)' : 'rgb(255, 99, 132)'),
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { title: { display: true, text: '時間點 n' }},
+                y: { title: { display: true, text: '乘積值' }}
+            }
+        }
+    });
+
+    // 計算結果
+    const sum = processProduct.reduce((a, b) => a + b, 0);
+    document.getElementById('calculationResult').innerHTML = `
+        <strong>計算結果</strong>：<br>
+        X(1) = Σ[x(n) × detector] = ${processProduct.join(' + ')} = <span style="color: red; font-size: 18px;">${sum.toFixed(2)}</span><br>
+        <em>由於信號確實包含頻率k=1的成分，所以檢測結果不為零！</em>
+    `;
+
+    // FFT樹狀圖 (簡化)
+    const treeCtx = document.getElementById('fftTreeChart').getContext('2d');
+    new Chart(treeCtx, {
+        type: 'bar',
+        data: {
+            labels: ['N=8', 'N=4', 'N=2', 'N=1'],
+            datasets: [{
+                label: 'DFT運算複雜度',
+                data: [64, 16, 4, 1],
+                backgroundColor: 'rgba(255, 99, 132, 0.6)',
+                borderColor: 'rgb(255, 99, 132)',
+                borderWidth: 2
+            }, {
+                label: 'FFT運算複雜度',
+                data: [24, 8, 4, 1],
+                backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                borderColor: 'rgb(75, 192, 192)',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { title: { display: true, text: '分解層級' }},
+                y: { title: { display: true, text: '運算次數' }}
+            }
+        }
+    });
+
+    // 正交性演示
+    const orthCtx = document.getElementById('orthogonalityChart').getContext('2d');
+    const freq1 = [];
+    const freq2 = [];
+    const product_orth = [];
+    
+    for (let n = 0; n < 8; n++) {
+        const f1 = Math.cos(2 * Math.PI * 1 * n / 8);
+        const f2 = Math.cos(2 * Math.PI * 2 * n / 8);
+        freq1.push(f1);
+        freq2.push(f2);
+        product_orth.push(f1 * f2);
+    }
+
+    new Chart(orthCtx, {
+        type: 'line',
+        data: {
+            labels: [0,1,2,3,4,5,6,7],
+            datasets: [{
+                label: '頻率1',
+                data: freq1,
+                borderColor: 'rgb(255, 99, 132)',
+                borderWidth: 2
+            }, {
+                label: '頻率2',
+                data: freq2,
+                borderColor: 'rgb(54, 162, 235)',
+                borderWidth: 2
+            }, {
+                label: '乘積 (正交→平均為0)',
+                data: product_orth,
+                borderColor: 'rgb(75, 192, 192)',
+                borderWidth: 3,
+                backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { title: { display: true, text: '時間點 n' }},
+                y: { title: { display: true, text: '振幅' }}
+            }
+        }
+    });
+</script>
+```
+
+</body>
+</html>
