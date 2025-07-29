@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Pulse FFT基礎概念</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .section { background: white; margin: 20px 0; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .chart-container { width: 100%; height: 300px; margin: 20px 0; }
+        .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .highlight { background: #e3f2fd; padding: 15px; border-left: 4px solid #2196f3; margin: 10px 0; }
+        .problem { background: #ffebee; padding: 15px; border-left: 4px solid #f44336; margin: 10px 0; }
+        .solution { background: #e8f5e8; padding: 15px; border-left: 4px solid #4caf50; margin: 10px 0; }
+        .warning { background: #fff3e0; padding: 15px; border-left: 4px solid #ff9800; margin: 10px 0; }
+        h2 { color: #1976d2; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; }
+        h3 { color: #424242; }
+        .formula { background: #f8f9fa; padding: 10px; border-radius: 5px; font-family: monospace; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Pulse FFT 基礎概念全解析</h1>
+
+```
+    <!-- 問題1：單頻vs寬頻 -->
+    <div class="section">
+        <h2>1. 單頻光 vs 寬頻光：時間越短，頻寬越寬！</h2>
+        
+        <div class="highlight">
+            <strong>🔑 關鍵概念：不確定性原理</strong><br>
+            <div class="formula">Δt × Δω ≥ 1/2</div>
+            <p><strong>意思</strong>：時間越短的pulse，包含的頻率範圍越寬！</p>
+        </div>
+
+        <div class="comparison">
+            <div>
+                <h3>📻 長脈衝（接近單頻）</h3>
+                <div class="chart-container">
+                    <canvas id="longPulseChart"></canvas>
+                </div>
+                <div class="solution">
+                    ✅ 很多個波長 → 接近單頻<br>
+                    ✅ FFT後會是窄峰
+                </div>
+            </div>
+            
+            <div>
+                <h3>⚡ 短脈衝（寬頻）</h3>
+                <div class="chart-container">
+                    <canvas id="shortPulseChart"></canvas>
+                </div>
+                <div class="warning">
+                    ⚠️ 只有1-2個波長 → 寬頻<br>
+                    ⚠️ FFT後會是寬峰
+                </div>
+            </div>
+        </div>
+
+        <div class="highlight">
+            <strong>回答您的問題</strong>：
+            <ul>
+                <li>📊 <strong>"只有一個波長"</strong> → FFT會得到很寬的頻譜，不是一個點！</li>
+                <li>🎯 <strong>判斷方法</strong>：看您的pulse包含幾個振盪週期</li>
+                <li>📏 <strong>經驗法則</strong>：>10個週期 ≈ 準單頻，<5個週期 = 寬頻</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 問題2：記錄時間長度 -->
+    <div class="section">
+        <h2>2. 為什麼要讓整個Pulse穿過？時間越長越好嗎？</h2>
+        
+        <div class="chart-container">
+            <canvas id="recordingTimeChart"></canvas>
+        </div>
+
+        <div class="highlight">
+            <strong>🎯 記錄時間的考量</strong>：
+            <ol>
+                <li><strong>完整性</strong>：必須記錄完整的pulse，否則會有truncation誤差</li>
+                <li><strong>頻率解析度</strong>：Δf = 1/T，記錄時間T越長，頻率解析度越好</li>
+                <li><strong>穩定性</strong>：longer ≠ better，太長會引入雜訊</li>
+            </ol>
+        </div>
+
+        <div class="warning">
+            <strong>⚠️ 最佳記錄時間</strong>：
+            <ul>
+                <li>📏 <strong>最短</strong>：pulse完全通過 + 一些buffer時間</li>
+                <li>📏 <strong>最長</strong>：避免長時間的數值雜訊累積</li>
+                <li>🎯 <strong>實用建議</strong>：pulse_duration × 2~3倍</li>
+            </ul>
+        </div>
+
+        <div class="formula">
+            最佳記錄時間 ≈ pulse_width + 2×(結構通過時間) + buffer
+        </div>
+    </div>
+
+    <!-- 問題3：FFT vs DFT -->
+    <div class="section">
+        <h2>3. FFT vs DFT：速度的差別</h2>
+        
+        <div class="comparison">
+            <div>
+                <h3>🐌 DFT (Discrete Fourier Transform)</h3>
+                <div class="formula">
+                    X(k) = Σ x(n) × e^(-j2πkn/N)<br>
+                    計算複雜度：O(N²)
+                </div>
+                <div class="problem">
+                    ❌ 對每個頻率都要計算N次<br>
+                    ❌ N=1024時需要 ~1M 次運算
+                </div>
+            </div>
+            
+            <div>
+                <h3>🚀 FFT (Fast Fourier Transform)</h3>
+                <div class="formula">
+                    使用分治法加速DFT<br>
+                    計算複雜度：O(N log N)
+                </div>
+                <div class="solution">
+                    ✅ 聰明的算法，重複利用計算<br>
+                    ✅ N=1024時只需要 ~10K 次運算
+                </div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="complexityChart"></canvas>
+        </div>
+
+        <div class="highlight">
+            <strong>結論</strong>：FFT和DFT的結果完全相同，但FFT快很多！<br>
+            現在所有軟體（Python, MATLAB等）說的"FFT"其實就是快速版的DFT。
+        </div>
+    </div>
+
+    <!-- 問題4：其他重要概念 -->
+    <div class="section">
+        <h2>4. 其他重要的基礎概念</h2>
+        
+        <div class="comparison">
+            <div>
+                <h3>🔢 取樣定理 (Nyquist)</h3>
+                <div class="formula">
+                    f_sample ≥ 2 × f_max
+                </div>
+                <div class="warning">
+                    ⚠️ 時間步Δt要夠小<br>
+                    否則會有aliasing
+                </div>
+            </div>
+            
+            <div>
+                <h3>🪟 視窗函數 (Windowing)</h3>
+                <div class="formula">
+                    減少頻譜洩漏<br>
+                    Hanning, Hamming, etc.
+                </div>
+                <div class="solution">
+                    ✅ 讓pulse邊界更smooth<br>
+                    ✅ 減少假的頻率成分
+                </div>
+            </div>
+        </div>
+
+        <h3>📚 您還應該知道的概念：</h3>
+        <ul>
+            <li><strong>🔄 週期性假設</strong>：FFT假設信號是週期性的</li>
+            <li><strong>📊 功率譜密度</strong>：|FFT(x)|²才是功率</li>
+            <li><strong>🎯 零填補 (Zero-padding)</strong>：增加頻率解析度的技巧</li>
+            <li><strong>⚡ 漏頻 (Spectral Leakage)</strong>：非整數週期造成的假頻率</li>
+            <li><strong>🔗 相位信息</strong>：FFT包含振幅和相位，功率只看振幅</li>
+        </ul>
+
+        <div class="solution">
+            <strong>🎯 實用建議</strong>：
+            <ol>
+                <li>先檢查您的pulse包含幾個振盪週期</li>
+                <li>確保記錄時間包含完整pulse</li>
+                <li>檢查時間步是否滿足Nyquist條件</li>
+                <li>考慮加視窗函數減少leakage</li>
+                <li>用|FFT(x)|²計算功率譜</li>
+            </ol>
+        </div>
+    </div>
+
+    <!-- 實用檢查清單 -->
+    <div class="section">
+        <h2>5. 您的Pulse分析檢查清單 ✅</h2>
+        
+        <div class="highlight">
+            <strong>🔍 檢查您的設置</strong>：
+            <pre style="background: #f0f0f0; padding: 10px; border-radius: 5px;">
+```
+
+# 1. 檢查pulse特性
+
+print(f”Pulse週期數: {source.cycle}”)
+print(f”Pulse持續時間: {source.cycle * source.period_sim * grid.time_step:.2e} 秒”)
+
+# 2. 檢查是否單頻
+
+if source.cycle > 10:
+print(“✅ 接近單頻”)
+elif source.cycle > 5:
+print(“⚠️ 準單頻”)
+else:
+print(“❌ 寬頻pulse”)
+
+# 3. 檢查記錄時間
+
+pulse_duration = source.cycle * source.period_sim
+if len(detector.E) > pulse_duration * 3:
+print(“✅ 記錄時間充足”)
+else:
+print(“⚠️ 可能需要更長記錄時間”)
+
+# 4. 檢查取樣
+
+dt = grid.time_step
+f_max = 1 / source.period  # 估算最高頻率
+if 1/dt > 2 * f_max:
+print(“✅ 滿足Nyquist條件”)
+else:
+print(“❌ 時間步太大，可能有aliasing”)
+</pre>
+</div>
+</div>
+</div>
+
+```
+<script>
+    // 長脈衝圖
+    const longPulseCtx = document.getElementById('longPulseChart').getContext('2d');
+    const longPulseData = [];
+    const longPulseLabels = [];
+    for (let i = 0; i < 200; i++) {
+        const t = i * 0.1;
+        longPulseLabels.push(t.toFixed(1));
+        // 長脈衝：10個週期的Gaussian
+        const envelope = Math.exp(-Math.pow((t - 10), 2) / 20);
+        const carrier = Math.cos(2 * Math.PI * t);
+        longPulseData.push(envelope * carrier);
+    }
+
+    new Chart(longPulseCtx, {
+        type: 'line',
+        data: {
+            labels: longPulseLabels,
+            datasets: [{
+                label: '長脈衝 (10個週期)',
+                data: longPulseData,
+                borderColor: 'rgb(75, 192, 192)',
+                borderWidth: 1,
+                pointRadius: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { title: { display: true, text: '時間' }},
+                y: { title: { display: true, text: '振幅' }}
+            }
+        }
+    });
+
+    // 短脈衝圖
+    const shortPulseCtx = document.getElementById('shortPulseChart').getContext('2d');
+    const shortPulseData = [];
+    const shortPulseLabels = [];
+    for (let i = 0; i < 200; i++) {
+        const t = i * 0.1;
+        shortPulseLabels.push(t.toFixed(1));
+        // 短脈衝：2個週期的Gaussian
+        const envelope = Math.exp(-Math.pow((t - 10), 2) / 4);
+        const carrier = Math.cos(2 * Math.PI * t);
+        shortPulseData.push(envelope * carrier);
+    }
+
+    new Chart(shortPulseCtx, {
+        type: 'line',
+        data: {
+            labels: shortPulseLabels,
+            datasets: [{
+                label: '短脈衝 (2個週期)',
+                data: shortPulseData,
+                borderColor: 'rgb(255, 99, 132)',
+                borderWidth: 1,
+                pointRadius: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { title: { display: true, text: '時間' }},
+                y: { title: { display: true, text: '振幅' }}
+            }
+        }
+    });
+
+    // 記錄時間示意圖
+    const recordingCtx = document.getElementById('recordingTimeChart').getContext('2d');
+    const recordingData1 = [];
+    const recordingData2 = [];
+    const recordingData3 = [];
+    const recordingLabels = [];
+    
+    for (let i = 0; i < 300; i++) {
+        const t = i * 0.1;
+        recordingLabels.push(t.toFixed(1));
+        
+        // 原始pulse
+        const pulse = Math.exp(-Math.pow((t - 10), 2) / 8) * Math.cos(2 * Math.PI * t);
+        recordingData1.push(pulse);
+        
+        // 太短的記錄
+        const shortRecord = (t < 15) ? pulse : 0;
+        recordingData2.push(shortRecord);
+        
+        // 適當的記錄
+        const goodRecord = (t < 25) ? pulse : 0;
+        recordingData3.push(goodRecord);
+    }
+
+    new Chart(recordingCtx, {
+        type: 'line',
+        data: {
+            labels: recordingLabels,
+            datasets: [{
+                label: '原始Pulse',
+                data: recordingData1,
+                borderColor: 'rgb(54, 162, 235)',
+                borderWidth: 2,
+                pointRadius: 0
+            }, {
+                label: '記錄太短 ❌',
+                data: recordingData2,
+                borderColor: 'rgb(255, 99, 132)',
+                borderWidth: 2,
+                pointRadius: 0,
+                borderDash: [5, 5]
+            }, {
+                label: '記錄適當 ✅',
+                data: recordingData3,
+                borderColor: 'rgb(75, 192, 192)',
+                borderWidth: 2,
+                pointRadius: 0,
+                borderDash: [10, 5]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { title: { display: true, text: '時間' }},
+                y: { title: { display: true, text: '振幅' }}
+            }
+        }
+    });
+
+    // 複雜度比較圖
+    const complexityCtx = document.getElementById('complexityChart').getContext('2d');
+    const nValues = [64, 128, 256, 512, 1024, 2048, 4096];
+    const dftOps = nValues.map(n => n * n);
+    const fftOps = nValues.map(n => n * Math.log2(n));
+
+    new Chart(complexityCtx, {
+        type: 'line',
+        data: {
+            labels: nValues,
+            datasets: [{
+                label: 'DFT: O(N²)',
+                data: dftOps,
+                borderColor: 'rgb(255, 99, 132)',
+                borderWidth: 2,
+                pointRadius: 4
+            }, {
+                label: 'FFT: O(N log N)',
+                data: fftOps,
+                borderColor: 'rgb(75, 192, 192)',
+                borderWidth: 2,
+                pointRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { 
+                    title: { display: true, text: '數據點數 N' },
+                    type: 'logarithmic'
+                },
+                y: { 
+                    title: { display: true, text: '運算次數' },
+                    type: 'logarithmic'
+                }
+            }
+        }
+    });
+</script>
+```
+
+</body>
+</html>
