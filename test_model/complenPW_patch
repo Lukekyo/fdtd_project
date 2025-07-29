@@ -1,52 +1,42 @@
 class ComplexPlaneWave:
-“”“A 2D plane wave source following Lumerical’s approach: always pulse, extract frequency via FFT”””
+“”“A 2D plane wave source following Lumerical’s approach”””
 
 ```
 def __init__(
     self,
-    # 主要參數 - 完全模仿 Lumerical 的介面
-    wavelength_min: float,
-    wavelength_max: float,
+    # 支援兩種介面方式
+    wavelength: float = None,           # 原有的單波長介面
+    wavelength_min: float = None,       # 新增：Lumerical 風格介面
+    wavelength_max: float = None,       # 新增：Lumerical 風格介面
     
-    # 其他參數
+    # 其他參數保持不變
     amplitude: complex = 1.0 + 0.0j,
     phase_shift: float = 0.0,
     theta_deg: float = 0.0,
     polarization_axis: str = "x",
     name: str = None,
     
-    # 進階選項
-    optimize_for_short_pulse: bool = True,  # 模仿 Lumerical 的設定
+    # 脈衝參數 - 改為自動計算
+    pulse: bool = None,                 # None = 自動決定
+    cycle: int = None,                  # None = 自動計算
+    optimize_for_short_pulse: bool = True,  # 新增：模仿 Lumerical 選項
+    
+    hanning_dt: float = None,
     medium_n: float = None
 ):
     """
-    創建ComplexPlaneWave，完全模仿 Lumerical 的做法：
-    - 總是使用脈衝（不管單頻或寬頻）
-    - 通過 FFT 提取所需頻率的響應
+    創建ComplexPlaneWave，支援 Lumerical 風格的波長設定
     
-    Args:
-        wavelength_min: 最小波長 (m)
-        wavelength_max: 最大波長 (m)
-        optimize_for_short_pulse: 是否優化短脈衝（Lumerical 預設開啟）
-        
-    注意：
-        - 不管 wavelength_min 是否等於 wavelength_max，都用脈衝
-        - 單頻時：脈衝覆蓋該頻率，FFT 提取單頻響應
-        - 寬頻時：脈衝覆蓋整個頻率範圍，FFT 提取寬頻響應
+    使用方式：
+    1. 原有方式：wavelength=1550e-9  
+    2. Lumerical 風格：wavelength_min=1500e-9, wavelength_max=1600e-9
+    3. 單頻 Lumerical 風格：wavelength_min=1550e-9, wavelength_max=1550e-9
     """
     
-    # 驗證輸入
-    if wavelength_min <= 0 or wavelength_max <= 0:
-        raise ValueError("波長必須大於 0")
-    if wavelength_min > wavelength_max:
-        raise ValueError("wavelength_min 不能大於 wavelength_max")
+    # 解析波長設定
+    self._parse_wavelength_input(wavelength, wavelength_min, wavelength_max)
     
     # 基本參數
-    self.wavelength_min = wavelength_min
-    self.wavelength_max = wavelength_max
-    self.wavelength_center = (wavelength_min + wavelength_max) / 2
-    self.wavelength_span = wavelength_max - wavelength_min
-    
     self.amplitude = amplitude
     self.phase_shift = phase_shift
     self.theta_deg = theta_deg
@@ -56,37 +46,24 @@ def __init__(
     self.n = medium_n if medium_n is not None else 1.0
     self.optimize_for_short_pulse = optimize_for_short_pulse
     
-    # 判斷是否為單頻（但都用脈衝！）
-    tolerance = 1e-12  # 浮點數比較容差
-    self.is_single_frequency = abs(wavelength_max - wavelength_min) < tolerance
+    # 計算頻率參數（使用中心波長）
+    self.frequency = bd.c0 / self.n / self.wavelength  # Hz
+    self.period = 1.0 / self.frequency  # 秒
+    self.omega = 2 * bd.pi * self.frequency  # rad/s
+    self.k = 2 * np.pi / self.wavelength  # 1/m
     
-    # 頻率參數計算
-    self.frequency_center = bd.c0 / self.n / self.wavelength_center
-    self.frequency_min = bd.c0 / self.n / wavelength_max  # 注意反向
-    self.frequency_max = bd.c0 / self.n / wavelength_min  # 注意反向
-    self.frequency = self.frequency_center
+    # Lumerical 風格：總是使用脈衝，自動計算參數
+    self._setup_lumerical_pulse_params(pulse, cycle)
     
-    self.period = 1.0 / self.frequency
-    self.omega = 2 * bd.pi * self.frequency
-    self.k = 2 * np.pi / self.wavelength_center
-    
-    # 計算頻譜特性
-    self.frequency_bandwidth = self.frequency_max - self.frequency_min
-    self.relative_bandwidth = self.wavelength_span / self.wavelength_center if self.wavelength_center > 0 else 0
-    
-    # Lumerical 風格的脈衝參數設定
-    self._setup_lumerical_pulse_parameters()
-    
-    # 總是使用脈衝！
-    self.pulse = True
-    self.source_type = "lumerical_style_pulse"
-    
-    # 初始化其他屬性
+    # 初始化其他屬性（保持原有結構）
     self.grid = None
     self.period_sim = None
     self.frequency_sim = None
     self.omega_sim = None
     self.hanning_dt_sim = None
+    self.hanning_dt = hanning_dt
+    
+    # monitor source properties（保持原有）
     self.monitoring_enabled = False
     self.monitor_data = {
         'timesteps': [],
@@ -95,196 +72,240 @@ def __init__(
         'phase': []
     }
 
-def _setup_lumerical_pulse_parameters(self):
-    """設定 Lumerical 風格的脈衝參數（基於圖片觀察）"""
+def _parse_wavelength_input(self, wavelength, wavelength_min, wavelength_max):
+    """解析波長輸入參數"""
     
-    if self.is_single_frequency:
-        # 單頻：使用較長的脈衝，看起來像平台但仍是脈衝
-        # 從圖片：單頻用 6.47 fs，寬頻用 3.32 fs
-        if self.optimize_for_short_pulse:
-            self.cycle = 8  # 較長，產生窄頻譜
-            self.pulse_type = "standard_single_freq"
-        else:
-            self.cycle = 12  # 更長，更精確的頻率
-            self.pulse_type = "long_single_freq"
-            
-    else:
-        # 寬頻：使用較短的脈衝，明顯的包絡形狀
-        # 從圖片：寬頻用短脈衝產生寬頻譜
-        if self.optimize_for_short_pulse:
-            # 短脈衝，類似圖1中的 "broadband" 設定
-            self.cycle = max(2, min(4, int(1.0 / max(self.relative_bandwidth, 0.1))))
-            self.pulse_type = "broadband_short"
-        else:
-            # 稍長但仍保持寬頻特性
-            self.cycle = max(3, min(8, int(1.5 / max(self.relative_bandwidth, 0.05))))
-            self.pulse_type = "broadband_medium"
+    # 計算設定了多少種方式
+    old_style = wavelength is not None
+    new_style = wavelength_min is not None or wavelength_max is not None
     
-    # 計算脈衝相關參數（模仿 Lumerical 的計算）
-    self._calculate_pulse_spectrum()
-
-def _calculate_pulse_spectrum(self):
-    """計算脈衝的頻譜特性（模仿 Lumerical 的分析）"""
+    if old_style and new_style:
+        raise ValueError("不能同時使用舊式 (wavelength) 和新式 (wavelength_min/max) 參數")
     
-    # 脈衝持續時間（以週期為單位）
-    self.pulse_duration_periods = self.cycle
-    self.pulse_duration_time = self.cycle * self.period
-    
-    # 脈衝的頻譜寬度（近似）
-    # 對於 Hanning 窗，主瓣寬度約為 2/cycle 倍的中心頻率
-    self.pulse_spectral_width = 2 * self.frequency / self.cycle
-    
-    # 計算脈衝覆蓋的有效頻率範圍
-    f_pulse_min = self.frequency - self.pulse_spectral_width / 2
-    f_pulse_max = self.frequency + self.pulse_spectral_width / 2
-    
-    self.pulse_freq_min = max(0, f_pulse_min)
-    self.pulse_freq_max = f_pulse_max
-    
-    # 檢查脈衝是否覆蓋所需的頻率範圍
-    self.frequency_coverage = {
-        'target_min': self.frequency_min,
-        'target_max': self.frequency_max,
-        'pulse_min': self.pulse_freq_min,
-        'pulse_max': self.pulse_freq_max,
-        'coverage_ok': (self.pulse_freq_min <= self.frequency_min and 
-                       self.pulse_freq_max >= self.frequency_max)
-    }
-
-def get_spectrum_info(self):
-    """返回詳細的頻譜資訊"""
-    return {
-        'source_approach': 'lumerical_style_always_pulse',
-        'is_single_frequency': self.is_single_frequency,
-        'optimization': 'short_pulse' if self.optimize_for_short_pulse else 'longer_pulse',
+    if old_style:
+        # 舊式：單一波長
+        self.wavelength = wavelength
+        self.wavelength_min = wavelength
+        self.wavelength_max = wavelength
+        self.input_style = "legacy"
         
-        # 目標頻譜
-        'target_wavelength_min_nm': self.wavelength_min * 1e9,
-        'target_wavelength_max_nm': self.wavelength_max * 1e9,
-        'target_wavelength_center_nm': self.wavelength_center * 1e9,
-        'target_frequency_min_THz': self.frequency_min / 1e12,
-        'target_frequency_max_THz': self.frequency_max / 1e12,
-        'target_frequency_center_THz': self.frequency_center / 1e12,
-        'target_bandwidth_THz': self.frequency_bandwidth / 1e12,
+    elif new_style:
+        # 新式：Lumerical 風格
+        if wavelength_min is None or wavelength_max is None:
+            raise ValueError("使用 Lumerical 風格時，必須同時設定 wavelength_min 和 wavelength_max")
+            
+        if wavelength_min <= 0 or wavelength_max <= 0:
+            raise ValueError("波長必須大於 0")
+        if wavelength_min > wavelength_max:
+            raise ValueError("wavelength_min 不能大於 wavelength_max")
+            
+        self.wavelength_min = wavelength_min
+        self.wavelength_max = wavelength_max
+        self.wavelength = (wavelength_min + wavelength_max) / 2  # 中心波長
+        self.input_style = "lumerical"
+        
+    else:
+        raise ValueError("必須設定 wavelength 或 (wavelength_min, wavelength_max)")
+    
+    # 計算頻譜特性
+    self.wavelength_span = self.wavelength_max - self.wavelength_min
+    self.frequency_center = bd.c0 / self.n / self.wavelength
+    self.frequency_min = bd.c0 / self.n / self.wavelength_max  # 注意反向
+    self.frequency_max = bd.c0 / self.n / self.wavelength_min
+    self.frequency_bandwidth = self.frequency_max - self.frequency_min
+    self.relative_bandwidth = self.wavelength_span / self.wavelength if self.wavelength > 0 else 0
+    
+    # 判斷是否為單頻
+    tolerance = 1e-12
+    self.is_single_frequency = abs(self.wavelength_max - self.wavelength_min) < tolerance
+
+def _setup_lumerical_pulse_params(self, pulse_override, cycle_override):
+    """設定 Lumerical 風格的脈衝參數"""
+    
+    # Lumerical 風格：總是使用脈衝
+    self.pulse = True  # 強制使用脈衝
+    
+    if cycle_override is not None:
+        # 用戶手動指定 cycle
+        self.cycle = cycle_override
+        self.pulse_mode = "manual"
+    else:
+        # 自動計算 cycle（模仿 Lumerical 邏輯）
+        if self.is_single_frequency:
+            # 單頻：較多週期，產生更窄的頻譜
+            if self.optimize_for_short_pulse:
+                self.cycle = 5   # 對應 Lumerical 的 "standard" 脈衝
+            else:
+                self.cycle = 10  # 更長脈衝，更精確
+            self.pulse_mode = "single_freq_auto"
+        else:
+            # 寬頻：根據相對頻寬調整
+            if self.optimize_for_short_pulse:
+                # 短脈衝，對應 Lumerical 的 "broadband" 脈衝
+                self.cycle = max(2, min(4, int(1.0 / max(self.relative_bandwidth, 0.1))))
+            else:
+                # 稍長脈衝，減少頻率範圍外的功率
+                self.cycle = max(3, min(8, int(1.5 / max(self.relative_bandwidth, 0.05))))
+            self.pulse_mode = "broadband_auto"
+    
+    # 設定脈衝類型標籤（用於顯示）
+    if self.is_single_frequency:
+        self.lumerical_pulse_type = "standard"
+    else:
+        self.lumerical_pulse_type = "broadband"
+
+def get_lumerical_info(self):
+    """返回 Lumerical 風格的資訊"""
+    return {
+        'input_style': self.input_style,
+        'is_single_frequency': self.is_single_frequency,
+        'lumerical_pulse_type': self.lumerical_pulse_type,
+        'pulse_mode': self.pulse_mode,
+        'optimize_for_short_pulse': self.optimize_for_short_pulse,
+        
+        # 波長資訊
+        'wavelength_min_nm': self.wavelength_min * 1e9,
+        'wavelength_max_nm': self.wavelength_max * 1e9,
+        'wavelength_center_nm': self.wavelength * 1e9,
+        'wavelength_span_nm': self.wavelength_span * 1e9,
+        
+        # 頻率資訊
+        'frequency_center_THz': self.frequency / 1e12,
+        'frequency_min_THz': self.frequency_min / 1e12,
+        'frequency_max_THz': self.frequency_max / 1e12,
+        'frequency_bandwidth_THz': self.frequency_bandwidth / 1e12,
         'relative_bandwidth_percent': self.relative_bandwidth * 100,
         
-        # 脈衝特性
-        'pulse_type': self.pulse_type,
+        # 脈衝資訊
         'pulse_cycles': self.cycle,
-        'pulse_duration_ps': self.pulse_duration_time * 1e12,
-        'pulse_spectral_width_THz': self.pulse_spectral_width / 1e12,
-        'pulse_freq_range_THz': [self.pulse_freq_min / 1e12, self.pulse_freq_max / 1e12],
-        
-        # 覆蓋檢查
-        'frequency_coverage': self.frequency_coverage
+        'pulse_duration_periods': self.cycle,
+        'pulse_duration_fs': self.cycle * self.period * 1e15,
     }
 
-def print_spectrum_info(self):
-    """列印頻譜資訊，模仿 Lumerical 的顯示風格"""
-    info = self.get_spectrum_info()
+def print_lumerical_info(self):
+    """印出 Lumerical 風格的資訊"""
+    info = self.get_lumerical_info()
     
-    print(f"📊 Source: {self.name or 'ComplexPlaneWave'}")
-    print(f"   Approach: Lumerical-style (always pulse + FFT)")
-    print(f"   Type: {'Single Frequency' if info['is_single_frequency'] else 'Broadband'}")
-    print(f"   Optimization: {'Short pulse' if self.optimize_for_short_pulse else 'Longer pulse'}")
+    print(f"📊 ComplexPlaneWave: {self.name or 'unnamed'}")
+    print(f"   Input Style: {info['input_style']}")
+    print(f"   Source Type: {'Single Frequency' if info['is_single_frequency'] else 'Broadband'}")
+    print(f"   Pulse Type: {info['lumerical_pulse_type']}")
+    print(f"   Pulse Mode: {info['pulse_mode']}")
     print()
     
-    print("🎯 Target Spectrum:")
     if info['is_single_frequency']:
-        print(f"   Wavelength: {info['target_wavelength_center_nm']:.1f} nm")
-        print(f"   Frequency: {info['target_frequency_center_THz']:.2f} THz")
+        print(f"🎯 Single Frequency Setting:")
+        print(f"   Wavelength: {info['wavelength_center_nm']:.1f} nm")
+        print(f"   Frequency: {info['frequency_center_THz']:.2f} THz")
     else:
-        print(f"   Wavelength: {info['target_wavelength_min_nm']:.1f} - {info['target_wavelength_max_nm']:.1f} nm")
-        print(f"   Frequency: {info['target_frequency_min_THz']:.2f} - {info['target_frequency_max_THz']:.2f} THz")
-        print(f"   Bandwidth: {info['target_bandwidth_THz']:.2f} THz ({info['relative_bandwidth_percent']:.1f}%)")
+        print(f"🌈 Broadband Setting:")
+        print(f"   Wavelength Range: {info['wavelength_min_nm']:.1f} - {info['wavelength_max_nm']:.1f} nm")
+        print(f"   Center Wavelength: {info['wavelength_center_nm']:.1f} nm")
+        print(f"   Span: {info['wavelength_span_nm']:.1f} nm ({info['relative_bandwidth_percent']:.1f}%)")
+        print(f"   Frequency Range: {info['frequency_min_THz']:.2f} - {info['frequency_max_THz']:.2f} THz")
     print()
     
-    print("⚡ Pulse Characteristics:")
-    print(f"   Type: {info['pulse_type']}")
+    print(f"⚡ Pulse Configuration:")
+    print(f"   Always Pulse: {self.pulse}")
     print(f"   Cycles: {info['pulse_cycles']}")
-    print(f"   Duration: {info['pulse_duration_ps']:.1f} ps")
-    print(f"   Spectral width: {info['pulse_spectral_width_THz']:.2f} THz")
-    print(f"   Pulse freq range: {info['pulse_freq_range_THz'][0]:.2f} - {info['pulse_freq_range_THz'][1]:.2f} THz")
+    print(f"   Duration: {info['pulse_duration_fs']:.1f} fs")
+    print(f"   Optimize for Short Pulse: {info['optimize_for_short_pulse']}")
     print()
     
-    print("✅ Coverage Check:")
-    coverage = info['frequency_coverage']
-    if coverage['coverage_ok']:
-        print("   ✅ Pulse spectrum covers target frequency range")
-    else:
-        print("   ⚠️ Pulse spectrum may not fully cover target range")
-        print(f"      Target: {coverage['target_min']/1e12:.2f} - {coverage['target_max']/1e12:.2f} THz")
-        print(f"      Pulse:  {coverage['pulse_min']/1e12:.2f} - {coverage['pulse_max']/1e12:.2f} THz")
-    print()
-    
-    print("🔄 Post-processing:")
+    print(f"💡 How it works (Lumerical style):")
     if info['is_single_frequency']:
-        print(f"   FFT will extract response at {info['target_frequency_center_THz']:.2f} THz")
+        print(f"   • Longer pulse ({info['pulse_cycles']} cycles) creates narrow spectrum")
+        print(f"   • FFT extracts steady-state response at {info['frequency_center_THz']:.2f} THz")
+        print(f"   • Result: Perfect CW response at target frequency")
     else:
-        print(f"   FFT will extract response over {info['target_frequency_min_THz']:.2f} - {info['target_frequency_max_THz']:.2f} THz")
+        print(f"   • Shorter pulse ({info['pulse_cycles']} cycles) creates broad spectrum") 
+        print(f"   • FFT extracts responses across {info['frequency_min_THz']:.2f}-{info['frequency_max_THz']:.2f} THz")
+        print(f"   • Result: Broadband frequency response from single simulation")
 
-def explain_lumerical_approach(self):
-    """解釋 Lumerical 的方法"""
-    print("🧠 Why Lumerical Always Uses Pulses:")
-    print("   1. 效率：一次脈衝模擬可獲得多頻率響應")
-    print("   2. 靈活：同樣的時域數據可提取任意頻率")
-    print("   3. 穩態：通過 FFT 得到真正的 CW 穩態響應")
-    print("   4. 一致性：統一的處理流程，減少錯誤")
-    print()
-    print("📊 Single Frequency 的秘密 (從圖片證實):")
-    print("   - 表面上：wavelength_min = wavelength_max (如 0.98-0.98 μm)")
-    print("   - 實際上：pulse type 仍顯示 'standard'，不是 CW！")
-    print("   - 脈衝長度：較長脈衝 (6.47 fs vs 3.32 fs)")
-    print("   - 時域信號：看起來像平台，但仍是有限長度脈衝")
-    print("   - 結果：FFT 提取該頻率的完美 CW 響應")
-    print()
-    print("🎵 Broadband vs Single Frequency 差異:")
-    print("   寬頻 (0.5-1.2 μm):")
-    print("     • pulse type: 'broadband'")
-    print("     • 短脈衝 (3.32 fs)，明顯包絡")
-    print("     • 寬頻譜覆蓋")
-    print("   單頻 (0.98-0.98 μm):")
-    print("     • pulse type: 'standard'") 
-    print("     • 長脈衝 (6.47 fs)，看似平台")
-    print("     • 窄頻譜集中")
-    print()
-    print("🔍 關鍵洞察：")
-    print("   - Lumerical 永遠不用真正的 CW")
-    print("   - 'single frequency' 只是長一點的脈衝")
-    print("   - 所有穩態結果都來自脈衝+FFT")
+# 保持其他原有方法不變
+def _register_grid(self, grid, x, y, z):
+    """原有的 _register_grid 方法保持不變"""
+    # ... 保持原有實現
+    pass
+
+def update_E(self):
+    """原有的 update_E 方法保持不變"""
+    # ... 保持原有實現
+    pass
+
+def update_H(self):
+    """原有的 update_H 方法保持不變"""
+    # ... 保持原有實現
+    pass
+
+# 新增便捷創建方法
+@classmethod
+def single_frequency(cls, wavelength: float, **kwargs):
+    """便捷方法：創建單頻光源（Lumerical 風格）"""
+    return cls(wavelength_min=wavelength, wavelength_max=wavelength, **kwargs)
+
+@classmethod
+def broadband(cls, wavelength_min: float, wavelength_max: float, **kwargs):
+    """便捷方法：創建寶頻光源（Lumerical 風格）"""
+    return cls(wavelength_min=wavelength_min, wavelength_max=wavelength_max, **kwargs)
+
+@classmethod
+def broadband_center_span(cls, wavelength_center: float, wavelength_span: float, **kwargs):
+    """便捷方法：創建寬頻光源（中心+跨度方式）"""
+    wavelength_min = wavelength_center - wavelength_span / 2
+    wavelength_max = wavelength_center + wavelength_span / 2
+    return cls(wavelength_min=wavelength_min, wavelength_max=wavelength_max, **kwargs)
 ```
 
-# 使用範例
+# 使用示例
 
-def demonstrate_lumerical_truth():
-“”“展示 Lumerical 真正的工作方式”””
+def demo_modified_complexplanewave():
+“”“展示修改後的 ComplexPlaneWave 用法”””
 
 ```
-print("=== Lumerical 的真相：總是脈衝！ ===\n")
+print("=== 修改後的 ComplexPlaneWave 使用範例 ===\n")
 
-# 單頻設定（但實際是脈衝）
-print("1. 'Single Frequency' Source (實際上是脈衝):")
-source1 = ComplexPlaneWave(
+# 1. 舊式用法（向後兼容）
+print("1. 舊式用法（向後兼容）:")
+source_old = ComplexPlaneWave(wavelength=1550e-9, name="legacy_source")
+source_old.print_lumerical_info()
+
+print("\n" + "="*60 + "\n")
+
+# 2. Lumerical 風格：單頻
+print("2. Lumerical 風格：單頻 (min=max)")
+source_single = ComplexPlaneWave(
     wavelength_min=1550e-9, 
-    wavelength_max=1550e-9,  # min = max
-    optimize_for_short_pulse=True
+    wavelength_max=1550e-9,
+    name="single_freq"
 )
-source1.print_spectrum_info()
+source_single.print_lumerical_info()
 
-# 寬頻設定
 print("\n" + "="*60 + "\n")
-print("2. Broadband Source (明顯的脈衝):")
-source2 = ComplexPlaneWave(
-    wavelength_min=1500e-9, 
-    wavelength_max=1600e-9,  # min ≠ max
-    optimize_for_short_pulse=True
+
+# 3. Lumerical 風格：寬頻
+print("3. Lumerical 風格：寬頻 (min≠max)")
+source_broad = ComplexPlaneWave(
+    wavelength_min=1500e-9,
+    wavelength_max=1600e-9,
+    optimize_for_short_pulse=True,
+    name="broadband"
 )
-source2.print_spectrum_info()
+source_broad.print_lumerical_info()
 
-# 解釋原理
 print("\n" + "="*60 + "\n")
-source1.explain_lumerical_approach()
+
+# 4. 便捷方法
+print("4. 便捷方法:")
+source_conv1 = ComplexPlaneWave.single_frequency(1550e-9)
+source_conv2 = ComplexPlaneWave.broadband_center_span(1550e-9, 100e-9)
+
+print("單頻便捷方法:")
+source_conv1.print_lumerical_info()
+
+print("\n中心+跨度便捷方法:")
+source_conv2.print_lumerical_info()
 ```
 
 if **name** == “**main**”:
-demonstrate_lumerical_truth()
+demo_modified_complexplanewave()
