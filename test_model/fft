@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Pulse FFT分析圖解</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .section { background: white; margin: 20px 0; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .chart-container { width: 100%; height: 300px; margin: 20px 0; }
+        .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .highlight { background: #e3f2fd; padding: 15px; border-left: 4px solid #2196f3; margin: 10px 0; }
+        .problem { background: #ffebee; padding: 15px; border-left: 4px solid #f44336; margin: 10px 0; }
+        .solution { background: #e8f5e8; padding: 15px; border-left: 4px solid #4caf50; margin: 10px 0; }
+        h2 { color: #1976d2; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; }
+        h3 { color: #424242; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 為什麼Pulse需要FFT分析穿透率？</h1>
+
+```
+    <div class="section">
+        <h2>1. 問題：什麼是穿透率？</h2>
+        <div class="highlight">
+            <strong>穿透率定義</strong>：特定頻率的透射功率 / 入射功率<br>
+            <code>T(ω) = P_transmitted(ω) / P_incident(ω)</code>
+        </div>
+        
+        <p><strong>關鍵問題</strong>：Pulse包含<span style="color: red;">多個頻率成分</span>，而不同頻率的穿透率可能不同！</p>
+    </div>
+
+    <div class="section">
+        <h2>2. 時域 vs 頻域對比</h2>
+        <div class="comparison">
+            <div>
+                <h3>🌊 時域信號（您detector記錄的）</h3>
+                <div class="chart-container">
+                    <canvas id="timeChart"></canvas>
+                </div>
+                <div class="problem">
+                    <strong>問題</strong>：混合了所有頻率成分<br>
+                    無法知道哪個頻率貢獻多少功率
+                </div>
+            </div>
+            
+            <div>
+                <h3>📊 頻域信號（FFT後）</h3>
+                <div class="chart-container">
+                    <canvas id="freqChart"></canvas>
+                </div>
+                <div class="solution">
+                    <strong>解決</strong>：分離各頻率成分<br>
+                    可計算每個頻率的穿透率
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>3. 為什麼結構對不同頻率響應不同？</h2>
+        <div class="chart-container">
+            <canvas id="responseChart"></canvas>
+        </div>
+        <div class="highlight">
+            <strong>物理原因</strong>：
+            <ul>
+                <li><strong>共振效應</strong>：某些頻率可能發生共振，穿透率變高</li>
+                <li><strong>色散</strong>：材料折射率隨頻率變化</li>
+                <li><strong>干涉</strong>：不同頻率在多層結構中的干涉不同</li>
+                <li><strong>尺寸效應</strong>：結構尺寸與波長的比例影響響應</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>4. FFT分析流程圖解</h2>
+        <div style="text-align: center; margin: 20px 0;">
+            <div style="display: inline-block; background: #e3f2fd; padding: 15px; border-radius: 10px; margin: 10px;">
+                📊 Pulse時間序列<br>
+                <code>P(t) = [P₁, P₂, P₃, ...]</code>
+            </div>
+            <div style="display: inline-block; margin: 0 20px; font-size: 24px;">➡️</div>
+            <div style="display: inline-block; background: #fff3e0; padding: 15px; border-radius: 10px; margin: 10px;">
+                🔄 FFT變換<br>
+                <code>FFT(P(t))</code>
+            </div>
+            <div style="display: inline-block; margin: 0 20px; font-size: 24px;">➡️</div>
+            <div style="display: inline-block; background: #e8f5e8; padding: 15px; border-radius: 10px; margin: 10px;">
+                📈 頻域功率譜<br>
+                <code>P(ω) = [P(ω₁), P(ω₂), ...]</code>
+            </div>
+        </div>
+        
+        <div class="highlight">
+            <strong>計算步驟</strong>：
+            <ol>
+                <li>對入射、穿透、反射的時間序列分別做FFT</li>
+                <li>獲得各頻率成分的功率譜密度</li>
+                <li>計算每個頻率的穿透率：<code>T(ω) = |P_trans(ω)|² / |P_inc(ω)|²</code></li>
+                <li>得到頻率相關的穿透率譜</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>5. 實際例子：Gaussian Pulse</h2>
+        <div class="chart-container">
+            <canvas id="exampleChart"></canvas>
+        </div>
+        <div class="highlight">
+            <strong>觀察重點</strong>：
+            <ul>
+                <li><span style="color: blue;">藍線</span>：Gaussian pulse（時域）</li>
+                <li><span style="color: red;">紅線</span>：FFT後的頻譜（頻域）</li>
+                <li><span style="color: green;">綠線</span>：結構的穿透率隨頻率變化</li>
+            </ul>
+            <p><strong>結論</strong>：不同頻率成分有不同的穿透率，需要FFT來分析！</p>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>6. 三種方法的適用場景</h2>
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background: #f5f5f5;">
+                <th style="border: 1px solid #ddd; padding: 12px;">方法</th>
+                <th style="border: 1px solid #ddd; padding: 12px;">適用情況</th>
+                <th style="border: 1px solid #ddd; padding: 12px;">結果意義</th>
+            </tr>
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 12px;"><strong>能量積分法</strong></td>
+                <td style="border: 1px solid #ddd; padding: 12px;">結構響應平坦<br>只關心總體效果</td>
+                <td style="border: 1px solid #ddd; padding: 12px;">整個pulse的總穿透率<br>（所有頻率平均）</td>
+            </tr>
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 12px;"><strong>FFT頻域法</strong></td>
+                <td style="border: 1px solid #ddd; padding: 12px;">需要頻率選擇性<br>結構有共振特性</td>
+                <td style="border: 1px solid #ddd; padding: 12px;">特定頻率的穿透率<br>T(ω)</td>
+            </tr>
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 12px;"><strong>峰值法</strong></td>
+                <td style="border: 1px solid #ddd; padding: 12px;">快速估算<br>pulse很窄</td>
+                <td style="border: 1px solid #ddd; padding: 12px;">主要頻率成分的穿透率<br>（近似）</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <h2>7. 總結</h2>
+        <div class="solution">
+            <strong>FFT的目的</strong>：
+            <ul>
+                <li>🔍 <strong>分離頻率成分</strong>：將混合的時域信號分解為各頻率成分</li>
+                <li>📊 <strong>頻域分析</strong>：計算每個頻率的功率貢獻</li>
+                <li>🎯 <strong>精確計算</strong>：獲得頻率相關的穿透率T(ω)</li>
+                <li>🔬 <strong>物理洞察</strong>：理解結構的頻率響應特性</li>
+            </ul>
+        </div>
+        
+        <div class="highlight">
+            <strong>選擇建議</strong>：
+            <ul>
+                <li>如果您的結構是<strong>簡單介質界面</strong> → 用能量積分法</li>
+                <li>如果您的結構有<strong>周期性、共振特性</strong> → 用FFT頻域法</li>
+                <li>如果只是<strong>快速驗證</strong> → 用峰值法</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 時域信號圖
+    const timeCtx = document.getElementById('timeChart').getContext('2d');
+    const timeData = [];
+    const timeLabels = [];
+    for (let i = 0; i < 200; i++) {
+        const t = i * 0.1;
+        timeLabels.push(t.toFixed(1));
+        // Gaussian pulse
+        const pulse = Math.exp(-Math.pow((t - 10), 2) / 8) * Math.cos(2 * Math.PI * t);
+        timeData.push(pulse);
+    }
+
+    new Chart(timeCtx, {
+        type: 'line',
+        data: {
+            labels: timeLabels,
+            datasets: [{
+                label: 'Pulse 時域信號 P(t)',
+                data: timeData,
+                borderColor: 'rgb(75, 192, 192)',
+                backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                borderWidth: 2,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { title: { display: true, text: '時間 (任意單位)' }},
+                y: { title: { display: true, text: '功率 (任意單位)' }}
+            },
+            plugins: {
+                legend: { display: true }
+            }
+        }
+    });
+
+    // 頻域信號圖
+    const freqCtx = document.getElementById('freqChart').getContext('2d');
+    const freqData = [];
+    const freqLabels = [];
+    for (let i = 0; i < 50; i++) {
+        const f = i * 0.2;
+        freqLabels.push(f.toFixed(1));
+        // Gaussian spectrum
+        const spectrum = Math.exp(-Math.pow((f - 2), 2) / 1);
+        freqData.push(spectrum);
+    }
+
+    new Chart(freqCtx, {
+        type: 'line',
+        data: {
+            labels: freqLabels,
+            datasets: [{
+                label: 'FFT頻譜 |P(ω)|²',
+                data: freqData,
+                borderColor: 'rgb(255, 99, 132)',
+                backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                borderWidth: 2,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { title: { display: true, text: '頻率 (任意單位)' }},
+                y: { title: { display: true, text: '功率譜密度' }}
+            },
+            plugins: {
+                legend: { display: true }
+            }
+        }
+    });
+
+    // 結構響應圖
+    const responseCtx = document.getElementById('responseChart').getContext('2d');
+    const responseFreqLabels = [];
+    const transmissionData = [];
+    const reflectionData = [];
+    
+    for (let i = 0; i < 100; i++) {
+        const f = i * 0.1;
+        responseFreqLabels.push(f.toFixed(1));
+        // 模擬有共振峰的穿透率
+        const resonance1 = 0.8 * Math.exp(-Math.pow((f - 2), 2) / 0.5);
+        const resonance2 = 0.6 * Math.exp(-Math.pow((f - 6), 2) / 0.8);
+        const baseline = 0.2;
+        const T = Math.min(1.0, baseline + resonance1 + resonance2);
+        const R = 1 - T;
+        
+        transmissionData.push(T);
+        reflectionData.push(R);
+    }
+
+    new Chart(responseCtx, {
+        type: 'line',
+        data: {
+            labels: responseFreqLabels,
+            datasets: [{
+                label: '穿透率 T(ω)',
+                data: transmissionData,
+                borderColor: 'rgb(54, 162, 235)',
+                backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                borderWidth: 2
+            }, {
+                label: '反射率 R(ω)',
+                data: reflectionData,
+                borderColor: 'rgb(255, 206, 86)',
+                backgroundColor: 'rgba(255, 206, 86, 0.1)',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { title: { display: true, text: '頻率 (任意單位)' }},
+                y: { title: { display: true, text: '穿透率/反射率' }, min: 0, max: 1 }
+            },
+            plugins: {
+                legend: { display: true }
+            }
+        }
+    });
+
+    // 實例圖
+    const exampleCtx = document.getElementById('exampleChart').getContext('2d');
+    const exampleLabels = [];
+    const pulseData = [];
+    const spectrumData = [];
+    const structureResponse = [];
+
+    for (let i = 0; i < 100; i++) {
+        const x = i * 0.2;
+        exampleLabels.push(x.toFixed(1));
+        
+        // Gaussian pulse in time
+        const pulse = Math.exp(-Math.pow((x - 10), 2) / 8);
+        pulseData.push(pulse);
+        
+        // Its spectrum (also Gaussian)
+        const spectrum = Math.exp(-Math.pow((x - 5), 2) / 2) * 0.8;
+        spectrumData.push(spectrum);
+        
+        // Structure response with resonance
+        const response = 0.3 + 0.5 * Math.exp(-Math.pow((x - 8), 2) / 3);
+        structureResponse.push(response);
+    }
+
+    new Chart(exampleCtx, {
+        type: 'line',
+        data: {
+            labels: exampleLabels,
+            datasets: [{
+                label: 'Gaussian Pulse (時域)',
+                data: pulseData,
+                borderColor: 'rgb(54, 162, 235)',
+                borderWidth: 2,
+                fill: false
+            }, {
+                label: 'FFT Spectrum (頻域)',
+                data: spectrumData,
+                borderColor: 'rgb(255, 99, 132)',
+                borderWidth: 2,
+                fill: false
+            }, {
+                label: '結構響應 T(ω)',
+                data: structureResponse,
+                borderColor: 'rgb(75, 192, 192)',
+                borderWidth: 2,
+                fill: false
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { title: { display: true, text: '時間/頻率 (任意單位)' }},
+                y: { title: { display: true, text: '振幅 (歸一化)' }}
+            },
+            plugins: {
+                legend: { display: true }
+            }
+        }
+    });
+</script>
+```
+
+</body>
+</html>
