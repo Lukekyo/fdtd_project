@@ -1,24 +1,12 @@
 class ComplexPlaneWave:
-“”“A 2D plane wave source with intuitive spectrum control”””
+“”“A 2D plane wave source with Lumerical-style spectrum control”””
 
 ```
 def __init__(
     self,
-    # 方式1: 單一波長 (單頻)
-    wavelength: float = None,
-    
-    # 方式2: 波長範圍 (寬頻)
-    wavelength_min: float = None,
-    wavelength_max: float = None,
-    
-    # 方式3: 中心波長 + 跨度 (寬頻)
-    wavelength_center: float = None,
-    wavelength_span: float = None,
-    
-    # 方式4: 頻率設定
-    frequency: float = None,
-    frequency_min: float = None,
-    frequency_max: float = None,
+    # 主要參數 - 模仿 Lumerical 的介面
+    wavelength_min: float,
+    wavelength_max: float,
     
     # 其他參數
     amplitude: complex = 1.0 + 0.0j,
@@ -27,29 +15,35 @@ def __init__(
     polarization_axis: str = "x",
     name: str = None,
     
-    # 脈衝參數 (自動計算或手動設定)
+    # 進階選項 (一般不需要手動設定)
     auto_pulse_params: bool = True,
-    cycle: int = None,
+    manual_cycle: int = None,
     hanning_dt: float = None,
     medium_n: float = None
 ):
     """
-    創建ComplexPlaneWave，支援多種頻譜設定方式
-    
-    設定方式 (擇一使用):
-    1. wavelength: 單一波長 → 單頻連續波
-    2. wavelength_min + wavelength_max: 波長範圍 → 寬頻脈衝
-    3. wavelength_center + wavelength_span: 中心波長+跨度 → 寬頻脈衝
-    4. frequency, frequency_min, frequency_max: 頻率設定
+    創建ComplexPlaneWave，模仿 Lumerical 的直觀介面
     
     Args:
-        wavelength: 單一波長 (m) - 用於單頻
-        wavelength_min/max: 波長範圍 (m) - 用於寬頻
-        wavelength_center/span: 中心波長和跨度 (m) - 用於寬頻
-        auto_pulse_params: 是否自動計算脈衝參數
-        cycle: 手動設定脈衝週期數
-        其他參數同原版
+        wavelength_min: 最小波長 (m)
+        wavelength_max: 最大波長 (m)
+        
+    注意：
+        - 當 wavelength_min == wavelength_max 時 → 單頻連續波
+        - 當 wavelength_min != wavelength_max 時 → 寬頻脈衝
     """
+    
+    # 驗證輸入
+    if wavelength_min <= 0 or wavelength_max <= 0:
+        raise ValueError("波長必須大於 0")
+    if wavelength_min > wavelength_max:
+        raise ValueError("wavelength_min 不能大於 wavelength_max")
+    
+    # 基本參數
+    self.wavelength_min = wavelength_min
+    self.wavelength_max = wavelength_max
+    self.wavelength_center = (wavelength_min + wavelength_max) / 2
+    self.wavelength_span = wavelength_max - wavelength_min
     
     self.amplitude = amplitude
     self.phase_shift = phase_shift
@@ -59,15 +53,46 @@ def __init__(
     self.name = name
     self.n = medium_n if medium_n is not None else 1.0
     
-    # 解析頻譜設定
-    self._parse_spectrum_settings(
-        wavelength, wavelength_min, wavelength_max,
-        wavelength_center, wavelength_span,
-        frequency, frequency_min, frequency_max
-    )
+    # 自動判斷單頻/寬頻
+    tolerance = 1e-12  # 浮點數比較容差
+    self.is_monochromatic = abs(wavelength_max - wavelength_min) < tolerance
     
-    # 設定脈衝參數
-    self._setup_pulse_parameters(auto_pulse_params, cycle, hanning_dt)
+    if self.is_monochromatic:
+        # 單頻模式 - 使用連續波
+        self.source_type = "monochromatic_cw"
+        self.pulse = False
+        self.wavelength = wavelength_min  # min = max
+        
+    else:
+        # 寬頻模式 - 使用脈衝
+        self.source_type = "broadband_pulse"
+        self.pulse = True
+        self.wavelength = self.wavelength_center
+        
+        # 自動計算脈衝參數
+        if auto_pulse_params and manual_cycle is None:
+            relative_bandwidth = self.wavelength_span / self.wavelength_center
+            # cycle 數與相對頻寬成反比，確保頻譜覆蓋
+            self.cycle = max(3, min(20, int(2.0 / relative_bandwidth)))
+        else:
+            self.cycle = manual_cycle if manual_cycle is not None else 5
+    
+    # 計算頻率參數
+    self.frequency_center = bd.c0 / self.n / self.wavelength_center
+    self.frequency_min = bd.c0 / self.n / wavelength_max  # 注意反向
+    self.frequency_max = bd.c0 / self.n / wavelength_min  # 注意反向
+    self.frequency = self.frequency_center
+    
+    self.period = 1.0 / self.frequency
+    self.omega = 2 * bd.pi * self.frequency
+    self.k = 2 * np.pi / self.wavelength
+    
+    # 計算頻譜特性
+    self.frequency_bandwidth = self.frequency_max - self.frequency_min
+    self.relative_bandwidth = self.wavelength_span / self.wavelength_center
+    
+    # 其他設定
+    self.hanning_dt = hanning_dt
     
     # 初始化其他屬性
     self.grid = None
@@ -83,198 +108,108 @@ def __init__(
         'phase': []
     }
 
-def _parse_spectrum_settings(self, wavelength, wavelength_min, wavelength_max,
-                           wavelength_center, wavelength_span,
-                           frequency, frequency_min, frequency_max):
-    """解析並驗證頻譜設定"""
-    
-    # 計算設定了多少種方式
-    settings_count = sum([
-        wavelength is not None,
-        all(x is not None for x in [wavelength_min, wavelength_max]),
-        all(x is not None for x in [wavelength_center, wavelength_span]),
-        frequency is not None,
-        all(x is not None for x in [frequency_min, frequency_max])
-    ])
-    
-    if settings_count == 0:
-        raise ValueError("必須設定頻譜參數")
-    elif settings_count > 1:
-        raise ValueError("只能使用一種頻譜設定方式")
-    
-    # 解析不同的設定方式
-    if wavelength is not None:
-        # 方式1: 單一波長 → 單頻
-        self.wavelength = wavelength
-        self.wavelength_min = wavelength
-        self.wavelength_max = wavelength
-        self.is_broadband = False
-        self.spectrum_type = "monochromatic"
-        
-    elif wavelength_min is not None and wavelength_max is not None:
-        # 方式2: 波長範圍 → 寬頻
-        if wavelength_min >= wavelength_max:
-            raise ValueError("wavelength_min 必須小於 wavelength_max")
-        self.wavelength_min = wavelength_min
-        self.wavelength_max = wavelength_max
-        self.wavelength = (wavelength_min + wavelength_max) / 2  # 中心波長
-        self.is_broadband = True
-        self.spectrum_type = "broadband_range"
-        
-    elif wavelength_center is not None and wavelength_span is not None:
-        # 方式3: 中心波長 + 跨度 → 寬頻
-        if wavelength_span <= 0:
-            raise ValueError("wavelength_span 必須大於 0")
-        self.wavelength = wavelength_center
-        self.wavelength_min = wavelength_center - wavelength_span / 2
-        self.wavelength_max = wavelength_center + wavelength_span / 2
-        if self.wavelength_min <= 0:
-            raise ValueError("wavelength_span 過大，導致最小波長 ≤ 0")
-        self.is_broadband = True
-        self.spectrum_type = "broadband_center_span"
-        
-    elif frequency is not None:
-        # 方式4: 單一頻率 → 單頻
-        self.wavelength = bd.c0 / self.n / frequency
-        self.wavelength_min = self.wavelength
-        self.wavelength_max = self.wavelength
-        self.is_broadband = False
-        self.spectrum_type = "monochromatic_freq"
-        
-    elif frequency_min is not None and frequency_max is not None:
-        # 方式5: 頻率範圍 → 寬頻
-        if frequency_min >= frequency_max:
-            raise ValueError("frequency_min 必須小於 frequency_max")
-        # 注意: 頻率範圍對應的波長範圍是反向的
-        self.wavelength_max = bd.c0 / self.n / frequency_min
-        self.wavelength_min = bd.c0 / self.n / frequency_max
-        self.wavelength = (self.wavelength_min + self.wavelength_max) / 2
-        self.is_broadband = True
-        self.spectrum_type = "broadband_freq_range"
-    
-    # 計算頻率參數
-    self.frequency = bd.c0 / self.n / self.wavelength  # 中心頻率
-    self.frequency_min = bd.c0 / self.n / self.wavelength_max
-    self.frequency_max = bd.c0 / self.n / self.wavelength_min
-    self.period = 1.0 / self.frequency
-    self.omega = 2 * bd.pi * self.frequency
-    self.k = 2 * np.pi / self.wavelength
-    
-    # 計算頻譜寬度
-    self.wavelength_bandwidth = self.wavelength_max - self.wavelength_min
-    self.frequency_bandwidth = self.frequency_max - self.frequency_min
-    self.relative_bandwidth = self.wavelength_bandwidth / self.wavelength
+@classmethod
+def monochromatic(cls, wavelength: float, **kwargs):
+    """便捷方法：創建單頻光源"""
+    return cls(wavelength_min=wavelength, wavelength_max=wavelength, **kwargs)
 
-def _setup_pulse_parameters(self, auto_pulse_params, cycle, hanning_dt):
-    """設定脈衝參數"""
-    
-    if self.is_broadband:
-        # 寬頻必須使用脈衝
-        self.pulse = True
-        
-        if auto_pulse_params:
-            # 自動計算最佳脈衝參數
-            # 脈衝寬度應該包含足夠的週期以覆蓋頻譜
-            # 一般來說，cycle = 1/相對頻寬 是個好的起點
-            if self.relative_bandwidth > 0:
-                self.cycle = max(3, int(1.0 / self.relative_bandwidth))
-            else:
-                self.cycle = 5  # 預設值
-            self.cycle = min(self.cycle, 20)  # 限制上限
-        else:
-            # 使用手動設定
-            self.cycle = cycle if cycle is not None else 5
-        
-        self.hanning_dt = hanning_dt  # 可以為 None，稍後計算
-        
-    else:
-        # 單頻可以選擇連續波或脈衝
-        self.pulse = cycle is not None  # 如果指定了 cycle 就使用脈衝
-        self.cycle = cycle if cycle is not None else 5
-        self.hanning_dt = hanning_dt
+@classmethod
+def broadband_range(cls, wavelength_min: float, wavelength_max: float, **kwargs):
+    """便捷方法：創建寬頻光源 (範圍)"""
+    return cls(wavelength_min=wavelength_min, wavelength_max=wavelength_max, **kwargs)
+
+@classmethod
+def broadband_center_span(cls, wavelength_center: float, wavelength_span: float, **kwargs):
+    """便捷方法：創建寬頻光源 (中心+跨度)"""
+    wavelength_min = wavelength_center - wavelength_span / 2
+    wavelength_max = wavelength_center + wavelength_span / 2
+    return cls(wavelength_min=wavelength_min, wavelength_max=wavelength_max, **kwargs)
 
 def get_spectrum_info(self):
     """返回頻譜資訊"""
-    info = {
-        'type': self.spectrum_type,
-        'is_broadband': self.is_broadband,
-        'wavelength_center': self.wavelength,
-        'wavelength_min': self.wavelength_min,
-        'wavelength_max': self.wavelength_max,
-        'wavelength_bandwidth': self.wavelength_bandwidth,
-        'frequency_center': self.frequency,
-        'frequency_min': self.frequency_min,
-        'frequency_max': self.frequency_max,
-        'frequency_bandwidth': self.frequency_bandwidth,
-        'relative_bandwidth': self.relative_bandwidth,
+    return {
+        'source_type': self.source_type,
+        'is_monochromatic': self.is_monochromatic,
+        'wavelength_min_nm': self.wavelength_min * 1e9,
+        'wavelength_max_nm': self.wavelength_max * 1e9,
+        'wavelength_center_nm': self.wavelength_center * 1e9,
+        'wavelength_span_nm': self.wavelength_span * 1e9,
+        'frequency_center_THz': self.frequency_center / 1e12,
+        'frequency_bandwidth_THz': self.frequency_bandwidth / 1e12,
+        'relative_bandwidth_percent': self.relative_bandwidth * 100,
         'pulse_enabled': self.pulse,
         'pulse_cycles': self.cycle if self.pulse else None
     }
-    return info
 
 def print_spectrum_info(self):
-    """印出頻譜資訊"""
+    """列印頻譜資訊，模仿 Lumerical 的顯示風格"""
     info = self.get_spectrum_info()
-    print(f"📊 光源頻譜資訊:")
-    print(f"   類型: {info['type']}")
-    print(f"   {'寬頻' if info['is_broadband'] else '單頻'}")
-    print(f"   中心波長: {info['wavelength_center']*1e6:.3f} μm")
     
-    if info['is_broadband']:
-        print(f"   波長範圍: {info['wavelength_min']*1e6:.3f} - {info['wavelength_max']*1e6:.3f} μm")
-        print(f"   頻寬: {info['wavelength_bandwidth']*1e9:.1f} nm")
-        print(f"   相對頻寬: {info['relative_bandwidth']*100:.1f}%")
+    print(f"📊 Source: {self.name or 'ComplexPlaneWave'}")
+    print(f"   Type: {'Monochromatic' if info['is_monochromatic'] else 'Broadband'}")
     
-    print(f"   中心頻率: {info['frequency_center']/1e12:.2f} THz")
-    
-    if info['pulse_enabled']:
-        print(f"   脈衝模式: {info['pulse_cycles']} 週期")
+    if info['is_monochromatic']:
+        print(f"   Wavelength: {info['wavelength_center_nm']:.1f} nm")
+        print(f"   Mode: Continuous Wave (CW)")
     else:
-        print(f"   連續波模式")
+        print(f"   Wavelength range: {info['wavelength_min_nm']:.1f} - {info['wavelength_max_nm']:.1f} nm")
+        print(f"   Center wavelength: {info['wavelength_center_nm']:.1f} nm")
+        print(f"   Bandwidth: {info['wavelength_span_nm']:.1f} nm ({info['relative_bandwidth_percent']:.1f}%)")
+        print(f"   Mode: Pulsed ({info['pulse_cycles']} cycles)")
+    
+    print(f"   Frequency: {info['frequency_center_THz']:.2f} THz")
+    
+    if not info['is_monochromatic']:
+        print(f"   Frequency bandwidth: {info['frequency_bandwidth_THz']:.2f} THz")
+
+def _register_grid(self, grid, x, y, z):
+    """註冊到網格的方法 (原有的邏輯)"""
+    # 這裡保持原有的網格註冊邏輯
+    # ...
+    pass
+
+def update_E(self):
+    """更新電場的方法 (原有的邏輯)"""
+    # 這裡保持原有的電場更新邏輯
+    # ...
+    pass
 ```
 
 # 使用範例
 
-def create_light_source_examples():
-“”“展示不同的光源創建方式”””
+def demonstrate_lumerical_style():
+“”“展示 Lumerical 風格的使用方式”””
 
 ```
-print("=== 光源創建範例 ===\n")
+print("=== Lumerical 風格的光源設定 ===\n")
 
-# 範例1: 單頻連續波
-print("1. 單頻連續波 (1550nm):")
-source1 = ComplexPlaneWave(wavelength=1550e-9)
+# 方式1: 像 Lumerical 一樣設定單頻 (min = max)
+print("1. 單頻光源 (模仿 Lumerical min=max 設定):")
+source1 = ComplexPlaneWave(wavelength_min=1550e-9, wavelength_max=1550e-9)
 source1.print_spectrum_info()
 print()
 
-# 範例2: 寬頻脈衝 (波長範圍)
-print("2. 寬頻脈衝 (1500-1600nm):")
+# 方式2: 像 Lumerical 一樣設定寬頻 (min ≠ max)
+print("2. 寬頻光源 (模仿 Lumerical min≠max 設定):")
 source2 = ComplexPlaneWave(wavelength_min=1500e-9, wavelength_max=1600e-9)
 source2.print_spectrum_info()
 print()
 
-# 範例3: 寬頻脈衝 (中心+跨度)
-print("3. 寬頻脈衝 (中心1550nm, 跨度100nm):")
-source3 = ComplexPlaneWave(wavelength_center=1550e-9, wavelength_span=100e-9)
-source3.print_spectrum_info()
-print()
-
-# 範例4: 頻率設定
-print("4. 頻率設定 (200-400 THz):")
-source4 = ComplexPlaneWave(frequency_min=200e12, frequency_max=400e12)
-source4.print_spectrum_info()
-print()
-
-# 範例5: 手動脈衝參數
-print("5. 手動脈衝參數:")
-source5 = ComplexPlaneWave(
+# 方式3: 便捷方法
+print("3. 便捷方法:")
+source3a = ComplexPlaneWave.monochromatic(wavelength=1550e-9)
+source3b = ComplexPlaneWave.broadband_center_span(
     wavelength_center=1550e-9, 
-    wavelength_span=50e-9,
-    auto_pulse_params=False,
-    cycle=10
+    wavelength_span=100e-9
 )
-source5.print_spectrum_info()
+
+print("單頻便捷方法:")
+source3a.print_spectrum_info()
+print()
+
+print("寬頻便捷方法:")
+source3b.print_spectrum_info()
 ```
 
 if **name** == “**main**”:
-create_light_source_examples()
+demonstrate_lumerical_style()
