@@ -20,21 +20,58 @@ def from_grid(index: int, grid_spacing: float) -> float:
     return index * grid_spacing
 # FDTD週期邊界條件診斷工具
 
-def analyze_results(grid, monitor_name_list, P_incident=None):
+# 在 fdtd_helper.py 末尾添加這些函數
+def get_monitor_power_at_wavelength(grid, monitor_name, wavelength=1550):
     """
-    根據 monitor_name_list 回傳每個 detector 的原始數據。
+    簡單獲取Monitor在特定波長的功率
+    
+    Args:
+        grid: FDTD網格
+        monitor_name: Monitor名稱
+        wavelength_nm: 波長(nm)
+    
+    Returns:
+        float: 該波長的功率
     """
-    results = {}
-    for name in monitor_name_list:
-        if not hasattr(grid, name):
-            print(f"⚠️ Grid 沒有名為 {name} 的 detector")
-            continue
-        detector = getattr(grid, name)
-        values = detector.detector_values()
-        pf = values.get("power_flow", None)
-        result = {"power_flow": pf, "all_values": values}
-        if P_incident is not None and pf is not None:
-            ratio = abs(pf) / P_incident if detector.flip_sign else pf / P_incident
-            result["ratio"] = ratio
-        results[name] = result
-    return results
+    
+    # 獲取數據
+    monitor = getattr(grid, monitor_name)
+    if hasattr(monitor, 'S'):
+        data = bd.array(monitor.S)
+    elif hasattr(monitor, 'monitor_data'):
+        data = bd.array(monitor.monitor_data['E_field'])
+    else:
+        return 0
+    print(data)
+    # FFT
+    fft_result = bd.fft(data)
+    freqs = bd.fftfreq(len(data), grid.time_step)
+    
+    # 找目標頻率
+    target_freq = bd.c0 / (wavelength * 1e-9)
+    freq_idx = bd.argmin(bd.abs(freqs - target_freq))
+    
+    # 返回功率
+    return bd.abs(fft_result[freq_idx])**2
+
+
+def calculate_T(grid, wavelength=1550):
+    """
+    超簡單T/R計算
+    
+    Returns:
+        tuple: (T, R)
+    """
+    
+    # 獲取各Monitor的功率
+    P_source = get_monitor_power_at_wavelength(grid, 'source', wavelength)
+    P_T = get_monitor_power_at_wavelength(grid, 'T', wavelength) 
+    # P_R = get_monitor_power_at_wavelength(grid, 'R', wavelength)
+    
+    # 計算T/R
+    T = P_T / P_source if P_source > 0 else 0
+    # R = P_R / P_source if P_source > 0 else 0
+    
+    print(f"λ={wavelength}nm: T={T:.3f}")
+    
+    return T

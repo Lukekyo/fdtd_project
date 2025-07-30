@@ -515,7 +515,7 @@ class ComplexPlaneWave:
         medium_n: float = None,
     ):
         """
-        創建ComplexPlaneWave，自動從wavelength計算所有頻率參數
+        創建ComplexPlaneWave，自動從wavelength計算所有頻率參數，模仿 Lumerical 的直觀介面
         
         Args:
             wavelength: 波長 (m) - 唯一需要的物理參數
@@ -706,6 +706,17 @@ class ComplexPlaneWave:
         print(f"🔋 源功率: {P_incident:.6e} W/m (長度: {source_length*1e6:.2f}μm)")
         return P_incident
     
+    def get_source_power_simple(self):
+        """最簡化的功率計算 - 只考慮振幅平方"""
+        E0 = abs(self.amplitude)
+        source_length = len(getattr(self, 'x', [1]))  # 源的網格點數
+        
+        # 最簡單：功率正比於振幅平方
+        P_incident = E0**2 * source_length  # 模擬單位
+        
+        print(f"🔋 源功率 (簡化版): {P_incident:.6e} (模擬單位)")
+        return P_incident
+
     def enable_monitoring(self):
         """啟用監測功能"""
         self.monitoring_enabled = True
