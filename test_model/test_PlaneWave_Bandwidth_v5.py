@@ -175,7 +175,7 @@ def field_visualization(grid):
 if __name__ == "__main__":
     try:
         # 選擇運行方式
-        USE_ANIMATION = True  # 是否使用動畫模擬
+        USE_ANIMATION = False  # 是否使用動畫模擬
         
         grid, simfolder = make_grid(with_structure=structure_enabled)
         grid.source.enable_monitoring()
@@ -185,14 +185,17 @@ if __name__ == "__main__":
             animation_interval=10  # 每n步顯示一次
         )
         # 快速場檢查
-        grid.source.analyze_source_output()
         grid.source.plot_source_analysis()
-        grid.source.get_source_power(grid_spacing)
-        P_in = grid.source.get_source_power_simple()
-        field_visualization(grid)
-        T = fdtd.calculate_T(grid, 1550)
-        # debug_detector_data_structure(grid.T)
-        # debug_detector_data_structure(grid.R)
+        # field_visualization(grid)
+        source_E = grid.source.monitor_data['E_field']
+        print(f"Source E-field shape: {np.shape(source_E)}")
+        source_H = grid.source.monitor_data['H_field']
+        print(f"Source H-field shape: {np.shape(source_H)}")
+        # plt.plot(source_E, label='Source E-field')
+        # plt.plot(source_H, label='Source H-field')
+        source_power = fdtd.get_source_power(grid, wavelength=wavelength)
+        # Trans, power_array = fdtd.get_result(grid, monitor_name = 'T', wavelength=wavelength)
+        # plt.plot(power_array)
         
     except Exception as e:
         print(f"\n💥 程式執行錯誤: {e}")

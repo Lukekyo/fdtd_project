@@ -125,6 +125,8 @@ class NumpyBackend(Backend):
     tanh = staticmethod(numpy.tanh)
     """ cosine of all elements in array """
 
+    sqrt = staticmethod(numpy.sqrt)
+
     sum = staticmethod(numpy.sum)
     """ sum elements in array """
 
@@ -133,6 +135,8 @@ class NumpyBackend(Backend):
 
     min = staticmethod(numpy.min)
     """ min element in array """
+
+    angle = staticmethod(numpy.angle)
 
     argmax = staticmethod(numpy.argmax)
 
@@ -309,6 +313,10 @@ if TORCH_AVAILABLE:
 
         min = staticmethod(torch.min)
         """ max element in array """
+
+        sqrt = staticmethod(torch.sqrt)
+
+        angle = staticmethod(torch.angle)
 
         argmax = staticmethod(torch.argmax)
 

@@ -556,6 +556,7 @@ class ComplexPlaneWave:
         self.monitor_data = {
             'timesteps': [],
             'E_field': [],
+            'H_field': [],      # 新增：記錄H場
             'envelope': [],
             'carrier_phase': []
         }
@@ -659,6 +660,17 @@ class ComplexPlaneWave:
 
         return x, y, z
 
+    def enable_monitoring(self):
+        """啟用監測功能"""
+        self.monitoring_enabled = True
+        # 將座標轉換為排序的列表
+        x_list = sorted(list(self.x))
+        z_list = sorted(list(self.z))
+        # 取中心點
+        self.monitor_center_x = x_list[len(x_list) // 2]
+        self.monitor_center_z = z_list[len(z_list) // 2]
+        # print(f" 監測已啟用")。
+
     def update_E(self):
 
         q = self.grid.time_steps_passed
@@ -684,8 +696,8 @@ class ComplexPlaneWave:
             
             field_value = self.amplitude * bd.exp(1j * total_phase) * envelope
             self.grid.E[xi, 0, zi, self.pol_index] += field_value
-
-            # 如果是中心點，記錄數據
+            
+            # # 如果是中心點，記錄數據
             if self.monitoring_enabled: 
                 if xi == self.monitor_center_x and zi == self.monitor_center_z:
                     self._record_source_output(q, envelope, field_value, time_phase)
@@ -693,40 +705,9 @@ class ComplexPlaneWave:
     def update_H(self):
         pass
 
-    def get_source_power(self, grid_spacing):
-        """功率計算"""
-        Z_medium = bd.eta0 / self.n
-        E0 = abs(self.amplitude)
-        print(f"eta0 = {bd.eta0:.2f} Ω, n = {self.n}, Z_medium = {Z_medium:.2f} Ω")
-        
-        source_length = len(getattr(self, 'x', [1])) * grid_spacing
-        power_density = 0.5 * E0**2 / Z_medium
-        P_incident = power_density * source_length
-        
-        print(f"🔋 源功率: {P_incident:.6e} W/m (長度: {source_length*1e6:.2f}μm)")
-        return P_incident
-    
-    def get_source_power_simple(self):
-        """最簡化的功率計算 - 只考慮振幅平方"""
-        E0 = abs(self.amplitude)
-        source_length = len(getattr(self, 'x', [1]))  # 源的網格點數
-        
-        # 最簡單：功率正比於振幅平方
-        P_incident = E0**2 * source_length  # 模擬單位
-        
-        print(f"🔋 源功率 (簡化版): {P_incident:.6e} (模擬單位)")
-        return P_incident
-
-    def enable_monitoring(self):
-        """啟用監測功能"""
-        self.monitoring_enabled = True
-        # 將座標轉換為排序的列表
-        x_list = sorted(list(self.x))
-        z_list = sorted(list(self.z))
-        # 取中心點
-        self.monitor_center_x = x_list[len(x_list) // 2]
-        self.monitor_center_z = z_list[len(z_list) // 2]
-        # print(f" 監測已啟用")。
+        if self.monitoring_enabled:
+            H_at_center = self.grid.H[self.monitor_center_x, 0, self.monitor_center_z, :]
+            self.monitor_data['H_field'].append(H_at_center)
 
     def _record_source_output(self, q, envelope, field_value, time_phase):
         """紀錄source輸出數據"""
@@ -739,16 +720,9 @@ class ComplexPlaneWave:
         self.monitor_data['envelope'].append(envelope)
         # 記錄載波相位
         self.monitor_data['carrier_phase'].append(time_phase)
-    
-    def get_monitor_data(self):
-        """獲取監測數據"""
-        if not self.monitoring_enabled:
-            print("監測未啟用，請先調用 enable_monitoring()")
-            return None
-        return self.monitor_data.copy()
-    
+
     def plot_source_analysis(self):
-        """分析並繪製source輸出"""
+        """修改版：處理三分量E場數據並只繪製中心時間點附近的數據"""
         if not self.monitoring_enabled or len(self.monitor_data['timesteps']) == 0:
             print("沒有監測數據")
             return
@@ -758,30 +732,31 @@ class ComplexPlaneWave:
         timesteps = bd.array(self.monitor_data['timesteps'])
         E_field = bd.array(self.monitor_data['E_field'])
 
-        # 繪製
-        plt.figure(figsize=(12, 6))
+        # 繪製中心部分
+        plt.figure(figsize=(10, 4))
+        
+        # 第一個子圖：主分量（z分量）
+        plt.subplot(1, 2, 1)
         plt.plot(timesteps, bd.real(E_field), 'b-', label='Real part', linewidth=1.5)
         plt.plot(timesteps, bd.imag(E_field), 'r--', label='Imag part', linewidth=1.5)
         plt.plot(timesteps, bd.abs(E_field), 'g:', label='|E|', linewidth=2)
-        
         plt.title(f'Source E_field vs timesteps ({"Pulse" if self.pulse else "CW"})')
         plt.xlabel('Timesteps')
         plt.ylabel('Electric Field')
         plt.legend()
         plt.grid(True, alpha=0.3)
-    
-    def analyze_source_output(self):
-        """簡單的數值統計"""
-        if not self.monitoring_enabled or len(self.monitor_data['timesteps']) == 0:
-            print("沒有監測數據")
-            return
-        
-        E_field = bd.array(self.monitor_data['E_field'])
-        
-        print(f"Source Output Analysis:")
-        print(f"  數據點數: {len(self.monitor_data['timesteps'])}")
-        print(f"  最大振幅: {bd.max(bd.abs(E_field)):.3f}")
-        print(f"  最小振幅: {bd.min(bd.abs(E_field)):.3f}")
+                
+        # 第二個子圖：相位信息
+        plt.subplot(1, 2, 2)
+        plt.plot(timesteps, bd.angle(E_field), 'orange', label='Phase(E)', linewidth=1.5)
+        plt.title('Phase of E')
+        plt.xlabel('Timesteps')
+        plt.ylabel('Phase (radians)')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+
+        plt.tight_layout()
+        plt.show()
 
     def __repr__(self):
         return (

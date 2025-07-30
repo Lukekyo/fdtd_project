@@ -30,6 +30,7 @@ class LineDetector:
         self.grid = None
         self.E = []
         self.H = []
+        self.S = []  # 新增：功率流時間序列
         self.name = name
 
         # 新增屬性用於後處理
@@ -127,6 +128,7 @@ class LineDetector:
         H = self.grid.H[self.x, self.y, self.z]
         self.H.append(H)
 
+
     def __repr__(self):
         return f"{self.__class__.__name__}(name={repr(self.name)})"
 
@@ -137,31 +139,31 @@ class LineDetector:
         z = f"[{self.z[0]}, ... , {self.z[-1]}]"
         s += f"        @ x={x}, y={y}, z={z}\n"
         return s
-
+    
     def detector_values(self):
-        """ Flaport 風格: 只回傳E和H的時間序列 """
         E_array = bd.array(self.E)
         H_array = bd.array(self.H)
-        result = {
-            "E": E_array, # 時間序列的電場
-            "H": H_array, # 時間序列的磁場
-        }
-
-        # 如果需要可以添加分量
-        if len(E_array.shape) >= 2 and E_array.shape[-1] >=3:
-            result.update({
-                "Ex": E_array[..., 0],
-                "Ey": E_array[..., 1],
-                "Ez": E_array[..., 2],
-            })
         
-        if len(H_array.shape) >= 2 and H_array.shape[-1] >= 3:
-            result.update({
-                "Hx": H_array[..., 0],
-                "Hy": H_array[..., 1],
-                "Hz": H_array[..., 2]
-            })
-
+        result = {
+            "E": E_array,
+            "H": H_array, 
+        }
+        
+        # 簡化：直接嘗試提取分量
+        try:
+            result["Ex"] = E_array[..., 0]
+            result["Ey"] = E_array[..., 1] 
+            result["Ez"] = E_array[..., 2]
+        except:
+            pass  # 如果沒有3個分量就跳過
+            
+        try:
+            result["Hx"] = H_array[..., 0]
+            result["Hy"] = H_array[..., 1]
+            result["Hz"] = H_array[..., 2]
+        except:
+            pass
+            
         return result
 
 

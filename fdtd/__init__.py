@@ -14,7 +14,8 @@ from .fourier import FrequencyRoutines
 from .visualization import dB_map_2D, plot_detection
 from .fdtd_helper import (
     um, nm, to_grid, from_grid,
-    get_monitor_power_at_wavelength,
-    calculate_T
+    get_data,
+    get_result,
+    get_source_power
     )
 from .visualize_domain import plot_simulation_domain
